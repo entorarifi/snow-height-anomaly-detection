@@ -1,0 +1,16 @@
+<View>
+    <TimeSeries name="ts" valueType="url" value="$csv"
+                sep=","
+                timeColumn="measure_date"
+                timeFormat="%Y-%m-%d"
+                overviewChannels="HS">
+        <Channel column="HS"
+                 units=""
+                 displayFormat=",.1f"
+                 strokeColor="#1f77b4"
+                 legend="HS"/>
+    </TimeSeries>
+    <TimeSeriesLabels name="label" toName="ts">
+      <Label value="Outlier" color="violet"/>
+    </TimeSeriesLabels>
+</View>

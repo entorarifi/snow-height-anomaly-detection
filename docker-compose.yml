@@ -33,10 +33,11 @@ services:
       - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-}
       - JSON_LOG=1
       - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
-      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/label-studio/data
+      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/
     #      - LOG_LEVEL=DEBUG
     command: label-studio-uwsgi
-
+    volumes:
+      - ./data:/imported_data
   db:
     image: postgres:11.5
     hostname: db
