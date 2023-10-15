@@ -1,47 +1,21 @@
 import logging
 import os
-import pandas as pd
 
-from label_studio_sdk import Client, Project
+import pandas as pd
 from dotenv import load_dotenv
+from label_studio_sdk import Project
+
+from label_studio_client import LabelStudioClient
 from utils import setup_logger
 
 
-class LabelStudioBootstrapper:
-    def __init__(
-            self,
-            base_url,
-            api_key,
-            project_name,
-            daily_snow_csv_path,
-            stations_csv_path,
-            label_config_path
-    ):
-        self.base_url = base_url
-        self.api_key = api_key
-        self.project_name = project_name
+class LabelStudioClientBootstrapper(LabelStudioClient):
+    def __init__(self, base_url, api_key, project_name, daily_snow_csv_path, stations_csv_path, label_config_path):
+        super().__init__(base_url, api_key, project_name)
         self.daily_snow_csv_path = daily_snow_csv_path
         self.stations_csv_path = stations_csv_path
         self.label_config_path = label_config_path
-        self.headers = {
-            'Authorization': f'Token {self.api_key}',
-            'Content-Type': 'application/json'
-        }
-        self.client: Client = self.get_client()
-        self.project: Project = self.get_project()
         self.tasks = []
-
-    def get_client(self):
-        return Client(url=self.base_url, api_key=self.api_key)
-
-    def get_project(self):
-        projects = self.client.get_projects()
-
-        for p in projects:
-            if p.get_params().get("title") == self.project_name:
-                return p
-
-        return None
 
     def create_project_if_not_exists(self):
         if self.get_project() is None:
@@ -94,11 +68,6 @@ class LabelStudioBootstrapper:
 
         df.groupby('station_code').apply(lambda x: station_to_csv(x))
 
-    def testing(self):
-        tasks = self.project.get_labeled_tasks()
-
-        print("hello")
-
 
 if __name__ == '__main__':
     load_dotenv()
@@ -110,10 +79,8 @@ if __name__ == '__main__':
     DAILY_SNOW_CSV_PATH = os.getenv('LS_DAILY_SNOW_CSV_PATH')
     STATIONS_CSV_PATH = os.getenv('LS_STATIONS_CSV_PATH')
     LABEL_CONFIG_PATH = os.getenv('LS_LABEL_CONFIG_PATH')
-    LOCAL_STORAGE_TITLE = os.getenv('LS_LOCAL_STORAGE_TITLE')
-    LOCAL_STORAGE_PATH = os.getenv('LS_LOCAL_STORAGE_PATH')
 
-    ls = LabelStudioBootstrapper(
+    ls = LabelStudioClientBootstrapper(
         base_url=BASE_URL,
         api_key=API_KEY,
         project_name=PROJECT_NAME,
