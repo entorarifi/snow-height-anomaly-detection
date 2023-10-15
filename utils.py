@@ -2,7 +2,7 @@ import logging
 import sys
 
 
-def setup_logger(name='', level=logging.DEBUG):
+def setup_logger(name='', level=logging.INFO):
     logger = logging.getLogger(name)
     logger.setLevel(level)
 

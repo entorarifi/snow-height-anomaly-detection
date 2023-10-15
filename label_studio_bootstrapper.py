@@ -1,7 +1,5 @@
 import logging
 import os
-import json
-import requests
 import pandas as pd
 
 from label_studio_sdk import Client, Project
@@ -15,26 +13,23 @@ class LabelStudioBootstrapper:
             base_url,
             api_key,
             project_name,
-            csv_path,
-            split_csv_path,
-            label_config_path,
-            local_storage_title,
-            local_storage_path,
+            daily_snow_csv_path,
+            stations_csv_path,
+            label_config_path
     ):
         self.base_url = base_url
         self.api_key = api_key
         self.project_name = project_name
-        self.csv_path = csv_path
-        self.split_csv_path = split_csv_path
+        self.daily_snow_csv_path = daily_snow_csv_path
+        self.stations_csv_path = stations_csv_path
         self.label_config_path = label_config_path
-        self.local_storage_title = local_storage_title
-        self.local_storage_path = local_storage_path
         self.headers = {
             'Authorization': f'Token {self.api_key}',
             'Content-Type': 'application/json'
         }
         self.client: Client = self.get_client()
         self.project: Project = self.get_project()
+        self.tasks = []
 
     def get_client(self):
         return Client(url=self.base_url, api_key=self.api_key)
@@ -48,93 +43,61 @@ class LabelStudioBootstrapper:
 
         return None
 
-    def get_local_storage(self):
-        project_id = self.project.get_params().get('id')
-        url = f"{self.base_url}/api/storages"
-
-        response = requests.get(url=url, params={'project': project_id}, headers=self.headers)
-
-        if response.status_code == 200:
-            for storage in response.json():
-                if storage['title'] == self.local_storage_title:
-                    return storage
-
-            return None
-
-        raise Exception(f'Failed to retrieve data: {response.status_code}')
-
-    def create_storage_if_not_exists(self):
-        local_storage = self.get_local_storage()
-
-        storage_id = None
-
-        if local_storage is None:
-            logging.info("Creating storage...")
-            storage_id = self.create_local_storage()
-        else:
-            logging.info("Storage already exists")
-
-        return storage_id if local_storage is None else local_storage['id']
-
-    def create_local_storage(self):
-        project_id = self.project.get_params().get('id')
-        url = f"{self.base_url}/api/storages/localfiles"
-
-        data = {
-            "path": self.local_storage_path,
-            "title": self.local_storage_title,
-            "project": project_id,
-            "use_blob_urls": True
-        }
-
-        response = requests.post(url=url, headers=self.headers, data=json.dumps(data))
-
-        if response.status_code == 201:
-            return response.json()['id']
-
-        raise Exception(f'Failed to retrieve data: {response.status_code}')
-
-    def bootstrap_project(self):
-        ls.split_data_into_stations()
-
-        if self.project is None:
+    def create_project_if_not_exists(self):
+        if self.get_project() is None:
             with open(LABEL_CONFIG_PATH) as xml:
-                self.project = ls.client.create_project(
+                project: Project = ls.client.create_project(
                     title=self.project_name,
                     label_config=xml.read()
                 )
-            logging.info("Project has been created")
 
-        storage_id = self.create_storage_if_not_exists()
+                logging.info("Project has been created")
 
-        self.project.sync_storage(
-            storage_type='localfiles',
-            storage_id=storage_id
-        )
-        logging.info("Storage has been synced")
+                return project
 
-    def split_data_into_stations(self, overwrite=False):
-        df = pd.read_csv(self.csv_path)
+    def bootstrap_project(self):
+        ls.group_data_by_station()
 
-        if os.path.isdir(self.split_csv_path):
-            logging.info("Data has already been split")
+        self.project = self.create_project_if_not_exists()
 
-            if not overwrite:
-                return
+        logging.info('Importing tasks...')
+        ids = self.project.import_tasks(self.tasks)
+        logging.info(f"{len(ids)} tasks were imported")
 
-            logging.info("Overwriting...")
+    def group_data_by_station(self):
+        df = pd.read_csv(self.daily_snow_csv_path)
+
+        if os.path.isdir(self.stations_csv_path):
+            logging.info("Stations dir exists. Overwriting...")
 
         else:
-            os.mkdir(self.split_csv_path)
-            logging.info("Splitting data...")
+            os.mkdir(self.stations_csv_path)
+            logging.info("Grouping data into separate CSVs...")
 
         def station_to_csv(x):
             station_code = x.iloc[0]['station_code']
-            file_name = f"{self.split_csv_path}/{station_code}.csv"
+            file_name = f"{self.stations_csv_path}/{station_code}.csv"
             x['measure_date'] = pd.to_datetime(x['measure_date']).dt.tz_localize(None)
             x.to_csv(file_name, index=False)
 
+            json_task = {
+                "data": {
+                    "csv": f"http://localhost:8888/stations/{station_code}.csv",
+                    "start_date": x.iloc[0]['measure_date'].strftime('%Y-%m-%d'),
+                    "end_date": x.iloc[-1]['measure_date'].strftime('%Y-%m-%d'),
+                    "number_of_datapoints": len(x),
+                    "station_code": station_code
+                }
+            }
+
+            self.tasks.append(json_task)
+
         df.groupby('station_code').apply(lambda x: station_to_csv(x))
+
+    def testing(self):
+        tasks = self.project.get_labeled_tasks()
+
+        print("hello")
 
 
 if __name__ == '__main__':
@@ -144,8 +107,8 @@ if __name__ == '__main__':
     BASE_URL = os.getenv('LS_BASE_URL')
     API_KEY = os.getenv('LS_API_KEY')
     PROJECT_NAME = os.getenv('LS_PROJECT_NAME')
-    ORIGINAL_CSV_FILE_PATH = os.getenv('LS_ORIGINAL_CSV_FILE_PATH')
-    SPLIT_CSV_DIR_PATH = os.getenv('LS_SPLIT_CSV_DIR_PATH')
+    DAILY_SNOW_CSV_PATH = os.getenv('LS_DAILY_SNOW_CSV_PATH')
+    STATIONS_CSV_PATH = os.getenv('LS_STATIONS_CSV_PATH')
     LABEL_CONFIG_PATH = os.getenv('LS_LABEL_CONFIG_PATH')
     LOCAL_STORAGE_TITLE = os.getenv('LS_LOCAL_STORAGE_TITLE')
     LOCAL_STORAGE_PATH = os.getenv('LS_LOCAL_STORAGE_PATH')
@@ -154,11 +117,10 @@ if __name__ == '__main__':
         base_url=BASE_URL,
         api_key=API_KEY,
         project_name=PROJECT_NAME,
-        csv_path=ORIGINAL_CSV_FILE_PATH,
-        split_csv_path=SPLIT_CSV_DIR_PATH,
+        daily_snow_csv_path=DAILY_SNOW_CSV_PATH,
+        stations_csv_path=STATIONS_CSV_PATH,
         label_config_path=LABEL_CONFIG_PATH,
-        local_storage_title=LOCAL_STORAGE_TITLE,
-        local_storage_path=LOCAL_STORAGE_PATH
     )
 
+    ls.client.delete_all_projects()
     ls.bootstrap_project()
