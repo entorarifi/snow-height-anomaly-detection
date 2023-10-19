@@ -1,6 +1,6 @@
 version: "3.9"
 services:
-  nginx:
+  labelstudio-nginx:
     build: .
     image: heartexlabs/label-studio:latest
     restart: unless-stopped
@@ -56,3 +56,23 @@ services:
       - CORS=true
     volumes:
       - ./data:/data
+
+  mlflow:
+    build: ./docker/mlflow
+    ports:
+      - "5000:5000"
+
+  minio:
+    image: quay.io/minio/minio
+    command: server --console-address ":9001" /data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
