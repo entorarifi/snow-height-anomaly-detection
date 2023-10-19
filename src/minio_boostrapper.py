@@ -6,8 +6,8 @@ from utils import setup_logger
 
 
 class MinioClientBootstrapper:
-    def __init__(self, endpoint, access_key, secret_key, secure=False):
-        self.client = Minio(endpoint, access_key, secret_key, secure=secure)
+    def __init__(self, endpoint, port, access_key, secret_key, secure=False):
+        self.client = Minio(f"{endpoint}:{port}", access_key, secret_key, secure=secure)
 
     def create_bucket_if_not_exists(self, bucket_name):
         if not self.client.bucket_exists(bucket_name):
@@ -25,13 +25,15 @@ if __name__ == '__main__':
     load_dotenv()
     logging = setup_logger()
 
-    ENDPOINT = os.getenv('MINIO_ENDPOINT')
-    ACCESS_KEY = os.getenv('MINIO_ACCESS_KEY')
-    SECRET_KEY = os.getenv('MINIO_SECRET_KEY')
-    SECURE = os.getenv('MINIO_SECURE').lower() == True
+    URL = os.getenv('MINIO_URL')
+    PORT = os.getenv('MINIO_PORT')
+    ACCESS_KEY = os.getenv('MINIO_ROOT_USER')
+    SECRET_KEY = os.getenv('MINIO_ROOT_PASSWORD')
+    SECURE = os.getenv('MINIO_STORAGE_USE_HTTPS').lower() == True
 
     minio_bootstrapper = MinioClientBootstrapper(
-        endpoint=ENDPOINT,
+        endpoint=URL,
+        port=PORT,
         access_key=ACCESS_KEY,
         secret_key=SECRET_KEY,
         secure=SECURE
