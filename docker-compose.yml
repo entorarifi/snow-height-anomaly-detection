@@ -35,7 +35,7 @@ services:
       - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
       - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/
     #      - LOG_LEVEL=DEBUG
-    command: label-studio-uwsgi
+    command: label-studio-uwsgi --debug
     volumes:
       - ./data:/imported_data
   db:
@@ -44,6 +44,8 @@ services:
     restart: unless-stopped
     environment:
       - POSTGRES_HOST_AUTH_METHOD=trust
+    ports:
+      - "5432:5432"
 
   file-server:
     image: halverneus/static-file-server:latest
@@ -51,5 +53,6 @@ services:
       - "8888:8080"
     environment:
       - FOLDER=/data
+      - CORS=true
     volumes:
       - ./data:/data
