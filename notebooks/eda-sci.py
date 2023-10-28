@@ -12,7 +12,7 @@ from pyod.models.iforest import IForest
 config = {'scrollZoom': True}
 original_show = go.Figure.show
 
-def custom_show(self, *args, **kwargs):
+ratsoenrotraitodef custom_show(self, *args, **kwargs):
     original_show(self, *args, **kwargs)
 
 go.Figure.show = custom_show
