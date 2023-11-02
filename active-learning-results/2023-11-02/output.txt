@@ -1,0 +1,409 @@
+<class 'keras.layers.rnn.lstm.LSTM'> 128 <function tanh at 0x7f9a3302d040> True
+<class '__main__.MonteCarloDropout'> 0.5
+<class 'keras.layers.rnn.lstm.LSTM'> 64 <function tanh at 0x7f9a3302d040> False
+<class '__main__.MonteCarloDropout'> 0.5
+<class 'keras.layers.core.dense.Dense'> 8 <function relu at 0x7f9a33029ca0>
+<class 'keras.layers.core.dense.Dense'> 1 <function sigmoid at 0x7f9a3302d1f0>
+====================================================
+Active Learning Iteration #0
+Current Training Stations: ['AMD2']
+Epoch 1/10
+58/58 [==============================] - 7s 46ms/step - loss: 0.2352 - accuracy: 0.9150 - val_loss: 0.1331 - val_accuracy: 0.9479
+Epoch 2/10
+58/58 [==============================] - 2s 27ms/step - loss: 0.1621 - accuracy: 0.9296 - val_loss: 0.1250 - val_accuracy: 0.9457
+Epoch 3/10
+58/58 [==============================] - 2s 33ms/step - loss: 0.1532 - accuracy: 0.9315 - val_loss: 0.1318 - val_accuracy: 0.9319
+Epoch 4/10
+58/58 [==============================] - 2s 29ms/step - loss: 0.1466 - accuracy: 0.9323 - val_loss: 0.1146 - val_accuracy: 0.9594
+Epoch 5/10
+58/58 [==============================] - 2s 27ms/step - loss: 0.1440 - accuracy: 0.9367 - val_loss: 0.1075 - val_accuracy: 0.9610
+Epoch 6/10
+58/58 [==============================] - 2s 26ms/step - loss: 0.1411 - accuracy: 0.9380 - val_loss: 0.1098 - val_accuracy: 0.9638
+Epoch 7/10
+58/58 [==============================] - 2s 27ms/step - loss: 0.1369 - accuracy: 0.9394 - val_loss: 0.1067 - val_accuracy: 0.9660
+Epoch 8/10
+58/58 [==============================] - 2s 28ms/step - loss: 0.1306 - accuracy: 0.9392 - val_loss: 0.1009 - val_accuracy: 0.9698
+Epoch 9/10
+58/58 [==============================] - 2s 27ms/step - loss: 0.1305 - accuracy: 0.9413 - val_loss: 0.1054 - val_accuracy: 0.9616
+Epoch 10/10
+58/58 [==============================] - 2s 27ms/step - loss: 0.1304 - accuracy: 0.9432 - val_loss: 0.1048 - val_accuracy: 0.9649
+Evaluation model on out of sample data...
+334/334 [==============================] - 7s 19ms/step - loss: 0.2808 - accuracy: 0.9121
+Calculating uncertainty scores...
+Most uncertain FLU2
+====================================================
+Active Learning Iteration #1
+Current Training Stations: ['AMD2', 'FLU2']
+Epoch 1/10
+102/102 [==============================] - 2s 22ms/step - loss: 0.1525 - accuracy: 0.9427 - val_loss: 0.1429 - val_accuracy: 0.9438
+Epoch 2/10
+102/102 [==============================] - 2s 21ms/step - loss: 0.1501 - accuracy: 0.9437 - val_loss: 0.1482 - val_accuracy: 0.9450
+Epoch 3/10
+102/102 [==============================] - 2s 22ms/step - loss: 0.1435 - accuracy: 0.9462 - val_loss: 0.1363 - val_accuracy: 0.9515
+Epoch 4/10
+102/102 [==============================] - 2s 21ms/step - loss: 0.1432 - accuracy: 0.9455 - val_loss: 0.1330 - val_accuracy: 0.9506
+Epoch 5/10
+102/102 [==============================] - 2s 22ms/step - loss: 0.1402 - accuracy: 0.9455 - val_loss: 0.1491 - val_accuracy: 0.9422
+Epoch 6/10
+102/102 [==============================] - 3s 24ms/step - loss: 0.1349 - accuracy: 0.9491 - val_loss: 0.1370 - val_accuracy: 0.9484
+Epoch 7/10
+102/102 [==============================] - 2s 23ms/step - loss: 0.1320 - accuracy: 0.9500 - val_loss: 0.1494 - val_accuracy: 0.9410
+Epoch 8/10
+102/102 [==============================] - 3s 26ms/step - loss: 0.1320 - accuracy: 0.9491 - val_loss: 0.1631 - val_accuracy: 0.9317
+Epoch 9/10
+102/102 [==============================] - 3s 28ms/step - loss: 0.1285 - accuracy: 0.9498 - val_loss: 0.1566 - val_accuracy: 0.9354
+Epoch 10/10
+102/102 [==============================] - 3s 27ms/step - loss: 0.1257 - accuracy: 0.9509 - val_loss: 0.1365 - val_accuracy: 0.9493
+Evaluation model on out of sample data...
+334/334 [==============================] - 6s 18ms/step - loss: 0.2728 - accuracy: 0.9170
+Calculating uncertainty scores...
+Most uncertain SHE2
+====================================================
+Active Learning Iteration #2
+Current Training Stations: ['AMD2', 'FLU2', 'SHE2']
+Epoch 1/10
+151/151 [==============================] - 4s 27ms/step - loss: 0.1321 - accuracy: 0.9518 - val_loss: 0.1540 - val_accuracy: 0.9399
+Epoch 2/10
+151/151 [==============================] - 4s 27ms/step - loss: 0.1284 - accuracy: 0.9511 - val_loss: 0.1419 - val_accuracy: 0.9458
+Epoch 3/10
+151/151 [==============================] - 4s 26ms/step - loss: 0.1239 - accuracy: 0.9532 - val_loss: 0.1490 - val_accuracy: 0.9458
+Epoch 4/10
+151/151 [==============================] - 4s 27ms/step - loss: 0.1251 - accuracy: 0.9539 - val_loss: 0.1437 - val_accuracy: 0.9474
+Epoch 5/10
+151/151 [==============================] - 4s 27ms/step - loss: 0.1236 - accuracy: 0.9543 - val_loss: 0.1507 - val_accuracy: 0.9428
+Epoch 6/10
+151/151 [==============================] - 4s 28ms/step - loss: 0.1190 - accuracy: 0.9554 - val_loss: 0.1567 - val_accuracy: 0.9449
+Epoch 7/10
+151/151 [==============================] - 4s 26ms/step - loss: 0.1186 - accuracy: 0.9561 - val_loss: 0.1556 - val_accuracy: 0.9445
+Epoch 8/10
+151/151 [==============================] - 4s 26ms/step - loss: 0.1162 - accuracy: 0.9566 - val_loss: 0.1597 - val_accuracy: 0.9441
+Epoch 9/10
+151/151 [==============================] - 4s 25ms/step - loss: 0.1169 - accuracy: 0.9558 - val_loss: 0.1442 - val_accuracy: 0.9464
+Epoch 10/10
+151/151 [==============================] - 4s 27ms/step - loss: 0.1148 - accuracy: 0.9559 - val_loss: 0.1672 - val_accuracy: 0.9441
+Evaluation model on out of sample data...
+334/334 [==============================] - 6s 19ms/step - loss: 0.2528 - accuracy: 0.9243
+Calculating uncertainty scores...
+Most uncertain GUT2
+====================================================
+Active Learning Iteration #3
+Current Training Stations: ['AMD2', 'FLU2', 'SHE2', 'GUT2']
+Epoch 1/10
+204/204 [==============================] - 6s 27ms/step - loss: 0.1227 - accuracy: 0.9551 - val_loss: 0.1494 - val_accuracy: 0.9490
+Epoch 2/10
+204/204 [==============================] - 5s 21ms/step - loss: 0.1167 - accuracy: 0.9574 - val_loss: 0.1571 - val_accuracy: 0.9458
+Epoch 3/10
+204/204 [==============================] - 5s 25ms/step - loss: 0.1147 - accuracy: 0.9581 - val_loss: 0.1486 - val_accuracy: 0.9481
+Epoch 4/10
+204/204 [==============================] - 6s 28ms/step - loss: 0.1135 - accuracy: 0.9584 - val_loss: 0.1485 - val_accuracy: 0.9489
+Epoch 5/10
+204/204 [==============================] - 6s 28ms/step - loss: 0.1118 - accuracy: 0.9594 - val_loss: 0.1494 - val_accuracy: 0.9510
+Epoch 6/10
+204/204 [==============================] - 6s 29ms/step - loss: 0.1111 - accuracy: 0.9594 - val_loss: 0.1475 - val_accuracy: 0.9476
+Epoch 7/10
+204/204 [==============================] - 6s 27ms/step - loss: 0.1092 - accuracy: 0.9605 - val_loss: 0.1502 - val_accuracy: 0.9509
+Epoch 8/10
+204/204 [==============================] - 6s 27ms/step - loss: 0.1079 - accuracy: 0.9615 - val_loss: 0.1551 - val_accuracy: 0.9480
+Epoch 9/10
+204/204 [==============================] - 6s 29ms/step - loss: 0.1055 - accuracy: 0.9619 - val_loss: 0.1522 - val_accuracy: 0.9483
+Epoch 10/10
+204/204 [==============================] - 6s 29ms/step - loss: 0.1095 - accuracy: 0.9606 - val_loss: 0.1577 - val_accuracy: 0.9501
+Evaluation model on out of sample data...
+334/334 [==============================] - 7s 19ms/step - loss: 0.2504 - accuracy: 0.9054
+Calculating uncertainty scores...
+Most uncertain ARO3
+====================================================
+Active Learning Iteration #4
+Current Training Stations: ['AMD2', 'FLU2', 'SHE2', 'GUT2', 'ARO3']
+Epoch 1/10
+264/264 [==============================] - 6s 23ms/step - loss: 0.1175 - accuracy: 0.9557 - val_loss: 0.1513 - val_accuracy: 0.9476
+Epoch 2/10
+264/264 [==============================] - 6s 21ms/step - loss: 0.1151 - accuracy: 0.9575 - val_loss: 0.1601 - val_accuracy: 0.9456
+Epoch 3/10
+264/264 [==============================] - 6s 21ms/step - loss: 0.1132 - accuracy: 0.9574 - val_loss: 0.1509 - val_accuracy: 0.9463
+Epoch 4/10
+264/264 [==============================] - 6s 21ms/step - loss: 0.1146 - accuracy: 0.9569 - val_loss: 0.1526 - val_accuracy: 0.9455
+Epoch 5/10
+264/264 [==============================] - 6s 21ms/step - loss: 0.1130 - accuracy: 0.9577 - val_loss: 0.1444 - val_accuracy: 0.9460
+Epoch 6/10
+264/264 [==============================] - 7s 25ms/step - loss: 0.1110 - accuracy: 0.9587 - val_loss: 0.1521 - val_accuracy: 0.9453
+Epoch 7/10
+264/264 [==============================] - 7s 27ms/step - loss: 0.1146 - accuracy: 0.9564 - val_loss: 0.1494 - val_accuracy: 0.9455
+Epoch 8/10
+264/264 [==============================] - 8s 28ms/step - loss: 0.1095 - accuracy: 0.9592 - val_loss: 0.1609 - val_accuracy: 0.9472
+Epoch 9/10
+264/264 [==============================] - 9s 32ms/step - loss: 0.1089 - accuracy: 0.9589 - val_loss: 0.1522 - val_accuracy: 0.9466
+Epoch 10/10
+264/264 [==============================] - 6s 23ms/step - loss: 0.1090 - accuracy: 0.9589 - val_loss: 0.1545 - val_accuracy: 0.9476
+Evaluation model on out of sample data...
+334/334 [==============================] - 6s 18ms/step - loss: 0.2599 - accuracy: 0.9141
+Calculating uncertainty scores...
+Most uncertain BOR2
+====================================================
+Active Learning Iteration #5
+Current Training Stations: ['AMD2', 'FLU2', 'SHE2', 'GUT2', 'ARO3', 'BOR2']
+Epoch 1/10
+313/313 [==============================] - 7s 22ms/step - loss: 0.1050 - accuracy: 0.9608 - val_loss: 0.1341 - val_accuracy: 0.9515
+Epoch 2/10
+313/313 [==============================] - 9s 27ms/step - loss: 0.1036 - accuracy: 0.9618 - val_loss: 0.1404 - val_accuracy: 0.9522
+Epoch 3/10
+313/313 [==============================] - 8s 26ms/step - loss: 0.1017 - accuracy: 0.9614 - val_loss: 0.1440 - val_accuracy: 0.9493
+Epoch 4/10
+313/313 [==============================] - 9s 29ms/step - loss: 0.1020 - accuracy: 0.9610 - val_loss: 0.1457 - val_accuracy: 0.9503
+Epoch 5/10
+313/313 [==============================] - 9s 27ms/step - loss: 0.1023 - accuracy: 0.9615 - val_loss: 0.1468 - val_accuracy: 0.9525
+Epoch 6/10
+313/313 [==============================] - 8s 26ms/step - loss: 0.1014 - accuracy: 0.9612 - val_loss: 0.1388 - val_accuracy: 0.9523
+Epoch 7/10
+313/313 [==============================] - 7s 22ms/step - loss: 0.0963 - accuracy: 0.9640 - val_loss: 0.1451 - val_accuracy: 0.9505
+Epoch 8/10
+313/313 [==============================] - 7s 22ms/step - loss: 0.0970 - accuracy: 0.9637 - val_loss: 0.1384 - val_accuracy: 0.9507
+Epoch 9/10
+313/313 [==============================] - 8s 26ms/step - loss: 0.0940 - accuracy: 0.9649 - val_loss: 0.1430 - val_accuracy: 0.9514
+Epoch 10/10
+313/313 [==============================] - 8s 26ms/step - loss: 0.0945 - accuracy: 0.9641 - val_loss: 0.1493 - val_accuracy: 0.9511
+Evaluation model on out of sample data...
+334/334 [==============================] - 7s 19ms/step - loss: 0.2418 - accuracy: 0.9254
+Calculating uncertainty scores...
+Most uncertain TUM2
+====================================================
+Active Learning Iteration #6
+Current Training Stations: ['AMD2', 'FLU2', 'SHE2', 'GUT2', 'ARO3', 'BOR2', 'TUM2']
+Epoch 1/10
+359/359 [==============================] - 10s 26ms/step - loss: 0.0945 - accuracy: 0.9654 - val_loss: 0.1433 - val_accuracy: 0.9504
+Epoch 2/10
+359/359 [==============================] - 10s 26ms/step - loss: 0.0900 - accuracy: 0.9671 - val_loss: 0.1322 - val_accuracy: 0.9533
+Epoch 3/10
+359/359 [==============================] - 11s 29ms/step - loss: 0.0889 - accuracy: 0.9672 - val_loss: 0.1348 - val_accuracy: 0.9537
+Epoch 4/10
+359/359 [==============================] - 9s 24ms/step - loss: 0.0888 - accuracy: 0.9674 - val_loss: 0.1369 - val_accuracy: 0.9520
+Epoch 5/10
+359/359 [==============================] - 9s 24ms/step - loss: 0.0882 - accuracy: 0.9670 - val_loss: 0.1321 - val_accuracy: 0.9531
+Epoch 6/10
+359/359 [==============================] - 10s 27ms/step - loss: 0.0859 - accuracy: 0.9684 - val_loss: 0.1409 - val_accuracy: 0.9517
+Epoch 7/10
+359/359 [==============================] - 11s 29ms/step - loss: 0.0844 - accuracy: 0.9689 - val_loss: 0.1338 - val_accuracy: 0.9537
+Epoch 8/10
+359/359 [==============================] - 9s 24ms/step - loss: 0.0843 - accuracy: 0.9684 - val_loss: 0.1417 - val_accuracy: 0.9545
+Epoch 9/10
+359/359 [==============================] - 8s 23ms/step - loss: 0.0828 - accuracy: 0.9691 - val_loss: 0.1370 - val_accuracy: 0.9531
+Epoch 10/10
+359/359 [==============================] - 10s 27ms/step - loss: 0.0850 - accuracy: 0.9686 - val_loss: 0.1325 - val_accuracy: 0.9532
+Evaluation model on out of sample data...
+334/334 [==============================] - 7s 19ms/step - loss: 0.2499 - accuracy: 0.9281
+Calculating uncertainty scores...
+Most uncertain SPN2
+====================================================
+Active Learning Iteration #7
+Current Training Stations: ['AMD2', 'FLU2', 'SHE2', 'GUT2', 'ARO3', 'BOR2', 'TUM2', 'SPN2']
+Epoch 1/10
+419/419 [==============================] - 12s 29ms/step - loss: 0.1188 - accuracy: 0.9568 - val_loss: 0.1405 - val_accuracy: 0.9486
+Epoch 2/10
+419/419 [==============================] - 12s 27ms/step - loss: 0.1103 - accuracy: 0.9586 - val_loss: 0.1369 - val_accuracy: 0.9483
+Epoch 3/10
+419/419 [==============================] - 12s 28ms/step - loss: 0.1064 - accuracy: 0.9601 - val_loss: 0.1386 - val_accuracy: 0.9471
+Epoch 4/10
+419/419 [==============================] - 9s 21ms/step - loss: 0.1067 - accuracy: 0.9597 - val_loss: 0.1429 - val_accuracy: 0.9478
+Epoch 5/10
+419/419 [==============================] - 11s 25ms/step - loss: 0.1039 - accuracy: 0.9619 - val_loss: 0.1548 - val_accuracy: 0.9450
+Epoch 6/10
+419/419 [==============================] - 11s 26ms/step - loss: 0.1019 - accuracy: 0.9623 - val_loss: 0.1530 - val_accuracy: 0.9429
+Epoch 7/10
+419/419 [==============================] - 11s 27ms/step - loss: 0.0994 - accuracy: 0.9632 - val_loss: 0.1542 - val_accuracy: 0.9440
+Epoch 8/10
+419/419 [==============================] - 11s 26ms/step - loss: 0.0964 - accuracy: 0.9648 - val_loss: 0.1477 - val_accuracy: 0.9493
+Epoch 9/10
+419/419 [==============================] - 11s 26ms/step - loss: 0.0970 - accuracy: 0.9650 - val_loss: 0.1496 - val_accuracy: 0.9455
+Epoch 10/10
+419/419 [==============================] - 11s 27ms/step - loss: 0.0952 - accuracy: 0.9651 - val_loss: 0.1558 - val_accuracy: 0.9470
+Evaluation model on out of sample data...
+334/334 [==============================] - 6s 18ms/step - loss: 0.2729 - accuracy: 0.9276
+Calculating uncertainty scores...
+Most uncertain FNH2
+====================================================
+Active Learning Iteration #8
+Current Training Stations: ['AMD2', 'FLU2', 'SHE2', 'GUT2', 'ARO3', 'BOR2', 'TUM2', 'SPN2', 'FNH2']
+Epoch 1/10
+477/477 [==============================] - 11s 22ms/step - loss: 0.0943 - accuracy: 0.9656 - val_loss: 0.1400 - val_accuracy: 0.9484
+Epoch 2/10
+477/477 [==============================] - 10s 21ms/step - loss: 0.0917 - accuracy: 0.9664 - val_loss: 0.1440 - val_accuracy: 0.9494
+Epoch 3/10
+477/477 [==============================] - 13s 27ms/step - loss: 0.0887 - accuracy: 0.9675 - val_loss: 0.1507 - val_accuracy: 0.9484
+Epoch 4/10
+477/477 [==============================] - 13s 28ms/step - loss: 0.0894 - accuracy: 0.9671 - val_loss: 0.1411 - val_accuracy: 0.9485
+Epoch 5/10
+477/477 [==============================] - 13s 27ms/step - loss: 0.0862 - accuracy: 0.9678 - val_loss: 0.1406 - val_accuracy: 0.9501
+Epoch 6/10
+477/477 [==============================] - 13s 27ms/step - loss: 0.0831 - accuracy: 0.9692 - val_loss: 0.1478 - val_accuracy: 0.9482
+Epoch 7/10
+477/477 [==============================] - 13s 27ms/step - loss: 0.0835 - accuracy: 0.9690 - val_loss: 0.1533 - val_accuracy: 0.9478
+Epoch 8/10
+477/477 [==============================] - 13s 27ms/step - loss: 0.0828 - accuracy: 0.9688 - val_loss: 0.1503 - val_accuracy: 0.9484
+Epoch 9/10
+477/477 [==============================] - 13s 27ms/step - loss: 0.0810 - accuracy: 0.9697 - val_loss: 0.1502 - val_accuracy: 0.9471
+Epoch 10/10
+477/477 [==============================] - 13s 26ms/step - loss: 0.0776 - accuracy: 0.9708 - val_loss: 0.1538 - val_accuracy: 0.9487
+Evaluation model on out of sample data...
+334/334 [==============================] - 6s 19ms/step - loss: 0.2738 - accuracy: 0.9304
+Calculating uncertainty scores...
+Most uncertain SLF2
+====================================================
+Active Learning Iteration #9
+Current Training Stations: ['AMD2', 'FLU2', 'SHE2', 'GUT2', 'ARO3', 'BOR2', 'TUM2', 'SPN2', 'FNH2', 'SLF2']
+Epoch 1/10
+535/535 [==============================] - 12s 21ms/step - loss: 0.0975 - accuracy: 0.9646 - val_loss: 0.1396 - val_accuracy: 0.9492
+Epoch 2/10
+535/535 [==============================] - 14s 27ms/step - loss: 0.0880 - accuracy: 0.9675 - val_loss: 0.1327 - val_accuracy: 0.9518
+Epoch 3/10
+535/535 [==============================] - 14s 26ms/step - loss: 0.0821 - accuracy: 0.9693 - val_loss: 0.1365 - val_accuracy: 0.9495
+Epoch 4/10
+535/535 [==============================] - 14s 26ms/step - loss: 0.0808 - accuracy: 0.9696 - val_loss: 0.1297 - val_accuracy: 0.9522
+Epoch 5/10
+535/535 [==============================] - 14s 26ms/step - loss: 0.0812 - accuracy: 0.9696 - val_loss: 0.1339 - val_accuracy: 0.9523
+Epoch 6/10
+535/535 [==============================] - 12s 22ms/step - loss: 0.0746 - accuracy: 0.9725 - val_loss: 0.1366 - val_accuracy: 0.9523
+Epoch 7/10
+535/535 [==============================] - 14s 27ms/step - loss: 0.0746 - accuracy: 0.9727 - val_loss: 0.1408 - val_accuracy: 0.9497
+Epoch 8/10
+535/535 [==============================] - 14s 26ms/step - loss: 0.0741 - accuracy: 0.9723 - val_loss: 0.1420 - val_accuracy: 0.9503
+Epoch 9/10
+535/535 [==============================] - 14s 25ms/step - loss: 0.0715 - accuracy: 0.9733 - val_loss: 0.1422 - val_accuracy: 0.9513
+Epoch 10/10
+535/535 [==============================] - 15s 27ms/step - loss: 0.0714 - accuracy: 0.9731 - val_loss: 0.1411 - val_accuracy: 0.9508
+Evaluation model on out of sample data...
+334/334 [==============================] - 6s 18ms/step - loss: 0.3208 - accuracy: 0.9255
+Calculating uncertainty scores...
+Most uncertain LAG3
+====================================================
+Active Learning Iteration #10
+Current Training Stations: ['AMD2', 'FLU2', 'SHE2', 'GUT2', 'ARO3', 'BOR2', 'TUM2', 'SPN2', 'FNH2', 'SLF2', 'LAG3']
+Epoch 1/10
+565/565 [==============================] - 16s 28ms/step - loss: 0.0733 - accuracy: 0.9740 - val_loss: 0.1377 - val_accuracy: 0.9513
+Epoch 2/10
+565/565 [==============================] - 16s 27ms/step - loss: 0.0747 - accuracy: 0.9732 - val_loss: 0.1400 - val_accuracy: 0.9477
+Epoch 3/10
+565/565 [==============================] - 16s 28ms/step - loss: 0.0722 - accuracy: 0.9739 - val_loss: 0.1417 - val_accuracy: 0.9506
+Epoch 4/10
+565/565 [==============================] - 16s 28ms/step - loss: 0.0692 - accuracy: 0.9747 - val_loss: 0.1450 - val_accuracy: 0.9499
+Epoch 5/10
+565/565 [==============================] - 16s 28ms/step - loss: 0.0686 - accuracy: 0.9752 - val_loss: 0.1447 - val_accuracy: 0.9493
+Epoch 6/10
+565/565 [==============================] - 15s 26ms/step - loss: 0.0686 - accuracy: 0.9758 - val_loss: 0.1444 - val_accuracy: 0.9520
+Epoch 7/10
+565/565 [==============================] - 15s 27ms/step - loss: 0.0705 - accuracy: 0.9749 - val_loss: 0.1434 - val_accuracy: 0.9503
+Epoch 8/10
+565/565 [==============================] - 14s 24ms/step - loss: 0.0662 - accuracy: 0.9763 - val_loss: 0.1487 - val_accuracy: 0.9515
+Epoch 9/10
+565/565 [==============================] - 15s 26ms/step - loss: 0.0640 - accuracy: 0.9772 - val_loss: 0.1509 - val_accuracy: 0.9506
+Epoch 10/10
+565/565 [==============================] - 15s 27ms/step - loss: 0.0701 - accuracy: 0.9742 - val_loss: 0.1471 - val_accuracy: 0.9477
+Evaluation model on out of sample data...
+334/334 [==============================] - 6s 19ms/step - loss: 0.3160 - accuracy: 0.9264
+Calculating uncertainty scores...
+Most uncertain STN2
+====================================================
+Active Learning Iteration #11
+Current Training Stations: ['AMD2', 'FLU2', 'SHE2', 'GUT2', 'ARO3', 'BOR2', 'TUM2', 'SPN2', 'FNH2', 'SLF2', 'LAG3', 'STN2']
+Epoch 1/10
+621/621 [==============================] - 15s 24ms/step - loss: 0.0751 - accuracy: 0.9733 - val_loss: 0.1427 - val_accuracy: 0.9484
+Epoch 2/10
+621/621 [==============================] - 17s 26ms/step - loss: 0.0685 - accuracy: 0.9752 - val_loss: 0.1440 - val_accuracy: 0.9482
+Epoch 3/10
+621/621 [==============================] - 17s 27ms/step - loss: 0.0689 - accuracy: 0.9750 - val_loss: 0.1548 - val_accuracy: 0.9483
+Epoch 4/10
+621/621 [==============================] - 17s 27ms/step - loss: 0.0665 - accuracy: 0.9762 - val_loss: 0.1479 - val_accuracy: 0.9512
+Epoch 5/10
+621/621 [==============================] - 17s 27ms/step - loss: 0.0749 - accuracy: 0.9725 - val_loss: 0.1307 - val_accuracy: 0.9523
+Epoch 6/10
+621/621 [==============================] - 15s 23ms/step - loss: 0.0718 - accuracy: 0.9740 - val_loss: 0.1479 - val_accuracy: 0.9464
+Epoch 7/10
+621/621 [==============================] - 15s 24ms/step - loss: 0.0669 - accuracy: 0.9763 - val_loss: 0.1442 - val_accuracy: 0.9495
+Epoch 8/10
+621/621 [==============================] - 16s 26ms/step - loss: 0.0659 - accuracy: 0.9759 - val_loss: 0.1476 - val_accuracy: 0.9495
+Epoch 9/10
+621/621 [==============================] - 18s 28ms/step - loss: 0.0645 - accuracy: 0.9771 - val_loss: 0.1493 - val_accuracy: 0.9499
+Epoch 10/10
+621/621 [==============================] - 18s 29ms/step - loss: 0.0618 - accuracy: 0.9776 - val_loss: 0.1425 - val_accuracy: 0.9505
+Evaluation model on out of sample data...
+334/334 [==============================] - 7s 20ms/step - loss: 0.2712 - accuracy: 0.9332
+Calculating uncertainty scores...
+Most uncertain KLO2
+====================================================
+Active Learning Iteration #12
+Current Training Stations: ['AMD2', 'FLU2', 'SHE2', 'GUT2', 'ARO3', 'BOR2', 'TUM2', 'SPN2', 'FNH2', 'SLF2', 'LAG3', 'STN2', 'KLO2']
+Epoch 1/10
+681/681 [==============================] - 18s 26ms/step - loss: 0.0658 - accuracy: 0.9766 - val_loss: 0.1342 - val_accuracy: 0.9554
+Epoch 2/10
+681/681 [==============================] - 18s 26ms/step - loss: 0.0643 - accuracy: 0.9768 - val_loss: 0.1378 - val_accuracy: 0.9533
+Epoch 3/10
+681/681 [==============================] - 16s 23ms/step - loss: 0.0663 - accuracy: 0.9759 - val_loss: 0.1421 - val_accuracy: 0.9501
+Epoch 4/10
+681/681 [==============================] - 18s 26ms/step - loss: 0.0624 - accuracy: 0.9774 - val_loss: 0.1470 - val_accuracy: 0.9503
+Epoch 5/10
+681/681 [==============================] - 18s 26ms/step - loss: 0.0640 - accuracy: 0.9763 - val_loss: 0.1403 - val_accuracy: 0.9536
+Epoch 6/10
+681/681 [==============================] - 18s 26ms/step - loss: 0.0614 - accuracy: 0.9778 - val_loss: 0.1393 - val_accuracy: 0.9528
+Epoch 7/10
+681/681 [==============================] - 18s 26ms/step - loss: 0.0615 - accuracy: 0.9775 - val_loss: 0.1471 - val_accuracy: 0.9494
+Epoch 8/10
+681/681 [==============================] - 18s 26ms/step - loss: 0.0607 - accuracy: 0.9783 - val_loss: 0.1390 - val_accuracy: 0.9526
+Epoch 9/10
+681/681 [==============================] - 17s 25ms/step - loss: 0.0589 - accuracy: 0.9785 - val_loss: 0.1508 - val_accuracy: 0.9522
+Epoch 10/10
+681/681 [==============================] - 17s 25ms/step - loss: 0.0585 - accuracy: 0.9788 - val_loss: 0.1591 - val_accuracy: 0.9475
+Evaluation model on out of sample data...
+334/334 [==============================] - 6s 17ms/step - loss: 0.2791 - accuracy: 0.9314
+Calculating uncertainty scores...
+Most uncertain GLA2
+====================================================
+Active Learning Iteration #13
+Current Training Stations: ['AMD2', 'FLU2', 'SHE2', 'GUT2', 'ARO3', 'BOR2', 'TUM2', 'SPN2', 'FNH2', 'SLF2', 'LAG3', 'STN2', 'KLO2', 'GLA2']
+Epoch 1/10
+731/731 [==============================] - 19s 26ms/step - loss: 0.0658 - accuracy: 0.9767 - val_loss: 0.1473 - val_accuracy: 0.9489
+Epoch 2/10
+731/731 [==============================] - 17s 23ms/step - loss: 0.0603 - accuracy: 0.9784 - val_loss: 0.1629 - val_accuracy: 0.9473
+Epoch 3/10
+731/731 [==============================] - 20s 27ms/step - loss: 0.0602 - accuracy: 0.9779 - val_loss: 0.1583 - val_accuracy: 0.9489
+Epoch 4/10
+731/731 [==============================] - 21s 28ms/step - loss: 0.0589 - accuracy: 0.9783 - val_loss: 0.1487 - val_accuracy: 0.9501
+Epoch 5/10
+731/731 [==============================] - 20s 27ms/step - loss: 0.0571 - accuracy: 0.9795 - val_loss: 0.1574 - val_accuracy: 0.9501
+Epoch 6/10
+731/731 [==============================] - 20s 27ms/step - loss: 0.0567 - accuracy: 0.9797 - val_loss: 0.1580 - val_accuracy: 0.9499
+Epoch 7/10
+731/731 [==============================] - 17s 24ms/step - loss: 0.0562 - accuracy: 0.9797 - val_loss: 0.1712 - val_accuracy: 0.9453
+Epoch 8/10
+731/731 [==============================] - 19s 26ms/step - loss: 0.0554 - accuracy: 0.9797 - val_loss: 0.1582 - val_accuracy: 0.9526
+Epoch 9/10
+731/731 [==============================] - 19s 26ms/step - loss: 0.0556 - accuracy: 0.9799 - val_loss: 0.1584 - val_accuracy: 0.9510
+Epoch 10/10
+731/731 [==============================] - 16s 22ms/step - loss: 0.0556 - accuracy: 0.9801 - val_loss: 0.1585 - val_accuracy: 0.9501
+Evaluation model on out of sample data...
+334/334 [==============================] - 6s 17ms/step - loss: 0.2791 - accuracy: 0.9355
+Calculating uncertainty scores...
+Most uncertain TRU2
+====================================================
+Active Learning Iteration #14
+Current Training Stations: ['AMD2', 'FLU2', 'SHE2', 'GUT2', 'ARO3', 'BOR2', 'TUM2', 'SPN2', 'FNH2', 'SLF2', 'LAG3', 'STN2', 'KLO2', 'GLA2', 'TRU2']
+Epoch 1/10
+791/791 [==============================] - 21s 26ms/step - loss: 0.0607 - accuracy: 0.9782 - val_loss: 0.1456 - val_accuracy: 0.9522
+Epoch 2/10
+791/791 [==============================] - 21s 27ms/step - loss: 0.0582 - accuracy: 0.9789 - val_loss: 0.1454 - val_accuracy: 0.9533
+Epoch 3/10
+791/791 [==============================] - 21s 27ms/step - loss: 0.0567 - accuracy: 0.9792 - val_loss: 0.1426 - val_accuracy: 0.9532
+Epoch 4/10
+791/791 [==============================] - 21s 26ms/step - loss: 0.0568 - accuracy: 0.9789 - val_loss: 0.1576 - val_accuracy: 0.9474
+Epoch 5/10
+791/791 [==============================] - 23s 29ms/step - loss: 0.0553 - accuracy: 0.9796 - val_loss: 0.1474 - val_accuracy: 0.9514
+Epoch 6/10
+791/791 [==============================] - 19s 24ms/step - loss: 0.0555 - accuracy: 0.9794 - val_loss: 0.1509 - val_accuracy: 0.9501
+Epoch 7/10
+791/791 [==============================] - 22s 28ms/step - loss: 0.0547 - accuracy: 0.9795 - val_loss: 0.1507 - val_accuracy: 0.9504
+Epoch 8/10
+791/791 [==============================] - 21s 26ms/step - loss: 0.0533 - accuracy: 0.9808 - val_loss: 0.1617 - val_accuracy: 0.9521
+Epoch 9/10
+791/791 [==============================] - 21s 27ms/step - loss: 0.0541 - accuracy: 0.9800 - val_loss: 0.1555 - val_accuracy: 0.9509
+Epoch 10/10
+791/791 [==============================] - 21s 27ms/step - loss: 0.0515 - accuracy: 0.9808 - val_loss: 0.1536 - val_accuracy: 0.9510
+Evaluation model on out of sample data...
+334/334 [==============================] - 7s 20ms/step - loss: 0.2815 - accuracy: 0.9364
