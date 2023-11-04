@@ -1,6 +1,6 @@
-import os
-import random
 import logging
+import os
+import re
 from io import BytesIO
 
 import keras
@@ -22,6 +22,7 @@ class MonteCarloDropout(keras.layers.Dropout):
 
 # noinspection PyDefaultArgument
 class ActiveLearner(LabelStudioClient):
+    # Dataset preparation and feature engineering
     SEQUENCE_LENGTH = 30
     TARGET_START_INDEX = SEQUENCE_LENGTH - 1
     FEATURE_COLUMNS = ['HS', 'day_sin', 'day_cos', 'month_sin', 'month_cos']
@@ -29,7 +30,19 @@ class ActiveLearner(LabelStudioClient):
     DATE_COLUMN = 'measure_date'
     SPLIT_PERCENTAGE = 0.8
     DATASET_BATCH_SIZE = 64
+
+    # Active learning
     UNCERTAINTY_ITERATIONS = 5
+
+    # Model configuration
+    MODEL_ARCHITECTURE = "128(l)-64-8(d)-1"
+    MODEL_INPUT_SHAPE = (SEQUENCE_LENGTH, len(FEATURE_COLUMNS))
+    MODEL_DROPOUT_RATE = 0.5
+    MODEL_OPTIMIZER = 'adam'
+    MODEL_METRICS = ['accuracy']
+    MODEL_LOSS = 'binary_crossentropy'
+    MODEL_BATCH_SIZE = 64
+    MODEL_EPOCHS = 10
 
     def __init__(self, base_url, api_key, project_name):
         super().__init__(base_url, api_key, project_name)
@@ -80,7 +93,7 @@ class ActiveLearner(LabelStudioClient):
     def create_dataset(self, features, targets, shuffle=False, start_index=None, end_index=None):
         return keras.utils.timeseries_dataset_from_array(
             data=features,
-            targets=targets[self.TARGET_START_INDEX:],
+            targets=None if targets is None else targets[self.TARGET_START_INDEX:],
             sequence_length=self.SEQUENCE_LENGTH,
             sequence_stride=1,
             sampling_rate=1,
@@ -149,6 +162,7 @@ class ActiveLearner(LabelStudioClient):
             start_dates.append(pd.Timestamp(label['value']['start']))
             end_dates.append(pd.Timestamp(label['value']['end']))
 
+        # TODO: Replace localhost with environment variable
         response = requests.get(url=f"http://localhost:8080{path}", headers=self.headers)
 
         if response.status_code == 200:
@@ -192,16 +206,7 @@ class ActiveLearner(LabelStudioClient):
 
         return train_dataset, val_dataset
 
-    def run_iteration(self):
-        # 1. Pick random station
-        unlabeled_tasks = self.project.get_unlabeled_tasks()
-        # task = random.choice(unlabeled_tasks)
-        task = unlabeled_tasks[0]
-
-        # 2. Ask for labels.
-        # TODO: This could potentially be a chrome notification or an email to annotators to label a specific station.
-
-        # 3. Label data
+    def simulate_data_label(self, task):
         # TODO: Should be extracted into a util function and not be a part of the active learning loop because
         #  it is considered that a human expert will label the data
         task_id = task['id']
@@ -212,20 +217,118 @@ class ActiveLearner(LabelStudioClient):
         payload = self.generate_payload(labeled_df)
         self.project.create_annotation(task_id, result=payload)
 
+    @staticmethod
+    def create_model(
+            architecture=MODEL_ARCHITECTURE,
+            input_shape=MODEL_INPUT_SHAPE,
+            dropout_rate=MODEL_DROPOUT_RATE,
+            summary=False
+    ):
+        arch_split = architecture.split('-')
+        dense = True
+        bidirectional = False
+        layers = []
+
+        digits_pattern = re.compile(r"\d+")
+
+        if 'l' in arch_split[0]:
+            rnn_layer = 'LSTM'
+        elif 'g' in arch_split[0]:
+            rnn_layer = 'GRU'
+        else:
+            raise Exception('rnn_layers must be one of [LSTM, GRU]')
+
+        if 'b' in arch_split[0]:
+            bidirectional = True
+
+        for i, layer in enumerate(reversed(arch_split)):
+            no_units = int(digits_pattern.findall(layer)[0])
+
+            if dense:
+                activation = 'sigmoid' if i == 0 else 'relu'
+                layers.append(keras.layers.Dense(no_units, activation=activation))
+            else:
+                args = {
+                    'units': no_units,
+                }
+
+                if '(d)' not in arch_split[-i]:
+                    args['return_sequences'] = True
+
+                if i == len(arch_split) - 1:
+                    args['input_shape'] = input_shape
+
+                current_layer = keras.layers.LSTM(**args) if rnn_layer == 'LSTM' else keras.layers.GRU(**args)
+
+                if bidirectional:
+                    current_layer = keras.layers.Bidirectional(current_layer)
+
+                layers.extend([
+                    MonteCarloDropout(dropout_rate),
+                    current_layer
+                ])
+
+            if '(d)' in layer:
+                dense = False
+
+        layers.reverse()
+
+        if summary:
+            logging.info('---------- Model summary ----------')
+            for layer in layers:
+                layer_type = str(type(layer))
+
+                if 'Dense' in str(type(layer)):
+                    logging.info(type(layer), layer.units, layer.activation)
+                elif 'Bidirectional' in str(type(layer)):
+                    logging.info(type(layer), layer.layer, layer.layer.units, layer.layer.activation,
+                                 layer.layer.return_sequences)
+                elif 'LSTM' in str(type(layer)):
+                    logging.info(type(layer), layer.units, layer.activation, layer.return_sequences)
+                elif 'GRU' in str(type(layer)):
+                    logging.info(type(layer), layer.units, layer.activation, layer.return_sequences)
+                elif 'Dropout' in layer_type:
+                    logging.info(type(layer), layer.rate)
+
+        return keras.Sequential(layers)
+
+    def run_iteration(self):
+        # 1. Pick random station
+        unlabeled_tasks = self.project.get_unlabeled_tasks()
+        # task = random.choice(unlabeled_tasks)
+        task = unlabeled_tasks[0]
+
+        # 2. Ask for labels.
+        # TODO: This could potentially be a chrome notification or an email to annotators to label a specific station.
+
+        # 3. Label data
+        self.simulate_data_label(task)
+
         # 4. Parse and split labeled data
         labeled_tasks = self.project.get_labeled_tasks()
         train_dataset, val_dataset = self.create_train_val_datasets(labeled_tasks)
 
-        # 5. Fit model
+        # 5. Build model
+        model = self.create_model()
+        model.compile(
+            optimizer=self.MODEL_OPTIMIZER,
+            metrics=self.MODEL_METRICS,
+            loss=self.MODEL_LOSS
+        )
 
-        # 5. Assign uncertainty scores
+        # 6. Fit model
+        history = model.fit(train_dataset, epochs=self.MODEL_EPOCHS, batch_size=self.MODEL_BATCH_SIZE,
+                            validation_data=val_dataset)
 
-    def predict(self):
+        # 7. Predict and assign uncertainty scores for unlabeled tasks
+        unlabeled_tasks = self.project.get_unlabeled_tasks()
+        self.predict(unlabeled_tasks, model)
+
+    def predict(self, unlabeled_tasks, model):
         # tasks = self.project.get_paginated_tasks(page_size=10, page=1)['tasks']
-        tasks = self.project.get_unlabeled_tasks()
         data = {}
 
-        for task in tasks:
+        for task in unlabeled_tasks:
             # TODO: Replace url with env variable
             response = requests.get(url=f"http://localhost:8080{task['data']['csv']}", headers=self.headers)
 
@@ -239,10 +342,10 @@ class ActiveLearner(LabelStudioClient):
                 raise Exception(f'Failed to retrieve data: {response.status_code}')
 
         # TODO: Predict with newly created model
-        model = keras.models.load_model(
-            '../active-learning-results/2023-11-02/model.keras',
-            custom_objects={'MonteCarloDropout': MonteCarloDropout}
-        )
+        # model = keras.models.load_model(
+        #     '../active-learning-results/2023-11-02/model.keras',
+        #     custom_objects={'MonteCarloDropout': MonteCarloDropout}
+        # )
 
         for k in data.keys():
             # Preprocess
@@ -284,15 +387,16 @@ class ActiveLearner(LabelStudioClient):
         fig.show()
 
     def purge_annotations(self):
+        # TODO: Replace localhost with env variable
         url = f'http://localhost:8080/api/dm/actions?id=delete_tasks_annotations&project={self.project_id}'
 
         response = requests.post(url=url, headers=self.headers)
 
         if response.status_code == 200:
             json_response = response.json()
-            logging.info(f"All ({json_response['processed_items']}) annotations were deleted")
+            logging.info(f"Annotations were purged. Total: {json_response['processed_items']}")
         else:
-            raise Exception(f'Failed to retrieve data: {response.status_code}')
+            raise Exception(f'Failed to purge annotations: {response.status_code}')
 
 
 if __name__ == '__main__':
