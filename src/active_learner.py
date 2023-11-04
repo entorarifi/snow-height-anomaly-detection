@@ -137,14 +137,12 @@ class ActiveLearner(LabelStudioClient):
 
         return payload
 
-    def get_most_uncertain_prediction(self):
-        unlabeled_tasks = self.project.get_unlabeled_tasks()
-
+    def get_most_uncertain_prediction(self, tasks):
         most_uncertain = {
             'predictions_score': 0
         }
 
-        for task in unlabeled_tasks:
+        for task in tasks:
             if task['predictions_score'] > most_uncertain['predictions_score']:
                 most_uncertain = task
 
@@ -292,38 +290,6 @@ class ActiveLearner(LabelStudioClient):
 
         return keras.Sequential(layers)
 
-    def run_iteration(self):
-        # 1. Pick random station
-        unlabeled_tasks = self.project.get_unlabeled_tasks()
-        # task = random.choice(unlabeled_tasks)
-        task = unlabeled_tasks[0]
-
-        # 2. Ask for labels.
-        # TODO: This could potentially be a chrome notification or an email to annotators to label a specific station.
-
-        # 3. Label data
-        self.simulate_data_label(task)
-
-        # 4. Parse and split labeled data
-        labeled_tasks = self.project.get_labeled_tasks()
-        train_dataset, val_dataset = self.create_train_val_datasets(labeled_tasks)
-
-        # 5. Build model
-        model = self.create_model()
-        model.compile(
-            optimizer=self.MODEL_OPTIMIZER,
-            metrics=self.MODEL_METRICS,
-            loss=self.MODEL_LOSS
-        )
-
-        # 6. Fit model
-        history = model.fit(train_dataset, epochs=self.MODEL_EPOCHS, batch_size=self.MODEL_BATCH_SIZE,
-                            validation_data=val_dataset)
-
-        # 7. Predict and assign uncertainty scores for unlabeled tasks
-        unlabeled_tasks = self.project.get_unlabeled_tasks()
-        self.predict(unlabeled_tasks, model)
-
     def predict(self, unlabeled_tasks, model):
         # tasks = self.project.get_paginated_tasks(page_size=10, page=1)['tasks']
         data = {}
@@ -367,6 +333,50 @@ class ActiveLearner(LabelStudioClient):
             payload = self.generate_payload(df)
 
             self.project.create_prediction(task_id=data[k]['task_id'], result=payload, score=float(uncertainty_score))
+
+    def run_iteration(self):
+        labeled_tasks = self.project.get_labeled_tasks(only_ids=True)
+        unlabeled_tasks = self.project.get_unlabeled_tasks()
+        # task = random.choice(unlabeled_tasks)
+
+        # 1. Pick a random station to label if this is the first iteration; otherwise, choose the one with the
+        # highest uncertainty score
+        task = unlabeled_tasks[0] if len(labeled_tasks) == 0 else self.get_most_uncertain_prediction(unlabeled_tasks)
+
+        # TODO: Might not work in the initial run
+        logging.info(f"Most uncertain: {task['data']['station_code']} with a score of {task['predictions_score']:.2f}")
+
+        # 2. Ask for labels.
+        # TODO: This could potentially be a chrome notification or an email to annotators to label a specific station.
+
+        # 3. Label data
+        self.simulate_data_label(task)
+
+        # 4. Parse and split labeled data. Refetch the tasks to include the newly labeled station data in the
+        # train/validation dataset split
+        labeled_tasks = self.project.get_labeled_tasks()
+        train_dataset, val_dataset = self.create_train_val_datasets(labeled_tasks)
+
+        # 5. Build model
+        model = self.create_model()
+        model.compile(
+            optimizer=self.MODEL_OPTIMIZER,
+            metrics=self.MODEL_METRICS,
+            loss=self.MODEL_LOSS
+        )
+        model.summary()
+
+        # 6. Fit model
+        history = model.fit(
+            train_dataset,
+            epochs=self.MODEL_EPOCHS,
+            batch_size=self.MODEL_BATCH_SIZE,
+            validation_data=val_dataset
+        )
+
+        # 7. Predict and assign uncertainty scores for unlabeled tasks
+        unlabeled_tasks = self.project.get_unlabeled_tasks()
+        self.predict(unlabeled_tasks, model)
 
     def display_time_series(self, task):
         df = self.parse_df(task)
@@ -414,5 +424,5 @@ if __name__ == '__main__':
     )
 
     # Set initial predictions
-    active_learner.purge_annotations()
+    # active_learner.purge_annotations()
     active_learner.run_iteration()
