@@ -13,9 +13,9 @@ class MinioClientBootstrapper:
     def create_bucket_if_not_exists(self, bucket_name):
         if not self.client.bucket_exists(bucket_name):
             self.client.make_bucket(bucket_name)
-            logging.info(f"Bucket '{bucket_name}' has been created.")
+            logging.info(f"Bucket '{bucket_name}' has been created")
         else:
-            logging.info(f"Bucket '{bucket_name}' already exists.")
+            logging.info(f"Bucket '{bucket_name}' already exists")
 
     def bootstrap_buckets(self):
         self.create_bucket_if_not_exists(self.mlflow_bucket)

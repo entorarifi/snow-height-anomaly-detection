@@ -11,7 +11,7 @@ class LabelStudioClient:
         self.api_key = api_key
         self.project_name = project_name
         self.client: Client = self.get_client()
-        self.project: Project = self.get_project()
+        self.project_id, self.project = self.get_project()
         self.headers = {
             'Authorization': f'Token {self.api_key}',
             'Content-Type': 'application/json'
@@ -24,7 +24,7 @@ class LabelStudioClient:
         projects = self.client.get_projects()
 
         for p in projects:
-            if p.get_params().get("title") == self.project_name:
-                return p
+            if p.get_params().get('title') == self.project_name:
+                return p.get_params().get('id'), p
 
         return None
