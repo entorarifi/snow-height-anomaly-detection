@@ -12,6 +12,10 @@ class LabelStudioClient:
         self.project_name = project_name
         self.client: Client = self.get_client()
         self.project: Project = self.get_project()
+        self.headers = {
+            'Authorization': f'Token {self.api_key}',
+            'Content-Type': 'application/json'
+        }
 
     def get_client(self):
         return Client(url=self.base_url, api_key=self.api_key)

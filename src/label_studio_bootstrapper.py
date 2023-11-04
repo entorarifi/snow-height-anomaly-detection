@@ -58,12 +58,8 @@ class LabelStudioClientBootstrapper(LabelStudioClient):
         project_id = self.project.get_params().get('id')
         url = f"{self.base_url}/api/storages"
 
-        headers = {
-            'Authorization': f'Token {self.api_key}',
-            'Content-Type': 'application/json'
-        }
 
-        response = requests.get(url=url, params={'project': project_id}, headers=headers)
+        response = requests.get(url=url, params={'project': project_id}, headers=self.headers)
 
         if response.status_code == 200:
             for storage in response.json():
