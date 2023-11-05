@@ -141,7 +141,8 @@ class ActiveLearner(LabelStudioClient):
 
         return payload
 
-    def get_most_uncertain_prediction(self, tasks):
+    @staticmethod
+    def get_most_uncertain_prediction(tasks):
         most_uncertain = {
             'predictions_score': 0
         }
@@ -164,8 +165,7 @@ class ActiveLearner(LabelStudioClient):
             start_dates.append(pd.Timestamp(label['value']['start']))
             end_dates.append(pd.Timestamp(label['value']['end']))
 
-        # TODO: Replace localhost with environment variable
-        response = requests.get(url=f"http://localhost:8080{path}", headers=self.headers)
+        response = requests.get(url=f"{self.base_url}{path}", headers=self.headers)
 
         if response.status_code == 200:
             df = pd.read_csv(BytesIO(response.content), encoding='UTF-8').dropna()
@@ -298,8 +298,7 @@ class ActiveLearner(LabelStudioClient):
         data = {}
 
         for task in unlabeled_tasks:
-            # TODO: Replace url with env variable
-            response = requests.get(url=f"http://localhost:8080{task['data']['csv']}", headers=self.headers)
+            response = requests.get(url=f"{self.base_url}/{task['data']['csv']}", headers=self.headers)
 
             if response.status_code == 200:
                 data[task['data']['station_code']] = {
@@ -412,8 +411,7 @@ class ActiveLearner(LabelStudioClient):
 
     def purge_annotations(self):
         logging.info('=============================== Purging Annotations ===============================')
-        # TODO: Replace localhost with env variable
-        url = f'http://localhost:8080/api/dm/actions?id=delete_tasks_annotations&project={self.project_id}'
+        url = f'{self.base_url}/api/dm/actions?id=delete_tasks_annotations&project={self.project_id}'
 
         response = requests.post(url=url, headers=self.headers)
 
