@@ -27,4 +27,4 @@ class LabelStudioClient:
             if p.get_params().get('title') == self.project_name:
                 return p.get_params().get('id'), p
 
-        return None
+        return None, None

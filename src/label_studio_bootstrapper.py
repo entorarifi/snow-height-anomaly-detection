@@ -21,7 +21,7 @@ class LabelStudioClientBootstrapper(LabelStudioClient):
             base_url,
             api_key,
             project_name,
-            daily_snow_csv_path,
+            labeled_train_data_path,
             label_config_path,
             s3_url,
             s3_user,
@@ -30,7 +30,7 @@ class LabelStudioClientBootstrapper(LabelStudioClient):
             s3_bucket_name
     ):
         super().__init__(base_url, api_key, project_name)
-        self.daily_snow_csv_path = daily_snow_csv_path
+        self.labeled_train_data_path = labeled_train_data_path
         self.label_config_path = label_config_path
         self.s3_url = s3_url
         self.s3_user = s3_user
@@ -38,14 +38,12 @@ class LabelStudioClientBootstrapper(LabelStudioClient):
         self.s3_secure = s3_secure
         self.s3_bucket_name = s3_bucket_name
 
-        self.tasks = []
-
         self.minio_client = Minio(self.s3_url, self.s3_user, self.s3_password, secure=self.s3_secure)
 
     def create_project_if_not_exists(self):
-        if self.get_project() is None:
-            with open(LABEL_CONFIG_PATH) as xml:
-                project: Project = ls.client.create_project(
+        if self.get_project()[0] is None:
+            with open(self.label_config_path) as xml:
+                project: Project = self.client.create_project(
                     title=self.project_name,
                     label_config=xml.read()
                 )
@@ -55,9 +53,8 @@ class LabelStudioClientBootstrapper(LabelStudioClient):
                 return project
 
     def get_storage(self):
-        project_id = self.project.get_params().get('id')
+        project_id = self.project_id
         url = f"{self.base_url}/api/storages"
-
 
         response = requests.get(url=url, params={'project': project_id}, headers=self.headers)
 
@@ -70,7 +67,7 @@ class LabelStudioClientBootstrapper(LabelStudioClient):
 
         raise Exception(f'Failed to retrieve data: {response.status_code}')
 
-    def create_storage_if_not_exists(self):
+    def connect_to_s3_storage(self):
         storage = self.get_storage()
 
         if storage is None:
@@ -90,20 +87,14 @@ class LabelStudioClientBootstrapper(LabelStudioClient):
             logging.info("Storage already exists")
 
     def bootstrap_project(self):
-        ls.upload_data_to_s3()
-
         self.project = self.create_project_if_not_exists()
-        self.create_storage_if_not_exists()
-
+        self.connect_to_s3_storage()
+        tasks = self.upload_data_to_s3_and_create_tasks()
         logging.info('Importing tasks...')
-        ids = self.project.import_tasks(self.tasks)
-        logging.info(f"{len(ids)} tasks were imported")
+        ids = self.project.import_tasks(tasks)
+        logging.info(f"{len(ids)} tasks have been imported")
 
-    def upload_data_to_s3(self):
-        df = pd.read_csv(self.daily_snow_csv_path)
-
-        df = df[['station_code', 'measure_date', 'HS']]
-
+    def upload_data_to_s3_and_create_tasks(self):
         objects_to_delete = [
             DeleteObject(obj.object_name)
             for obj in self.minio_client.list_objects(self.s3_bucket_name, recursive=True)
@@ -111,12 +102,18 @@ class LabelStudioClientBootstrapper(LabelStudioClient):
 
         self.minio_client.remove_objects(self.s3_bucket_name, objects_to_delete)
 
-        def station_to_csv(x):
-            station_code = x.iloc[0]['station_code']
-            file_name = f"{station_code}.csv"
-            x['measure_date'] = pd.to_datetime(x['measure_date']).dt.tz_localize(None)
+        files = os.listdir(self.labeled_train_data_path)
 
-            csv_bytes = x.to_csv(index=False).encode('UTF-8')
+        tasks = []
+
+        for f in files:
+            station_df = pd.read_csv(os.path.join(self.labeled_train_data_path, f), index_col=False)
+            station_df = station_df[['station_code', 'measure_date', 'HS']]
+            station_code = station_df.iloc[0]['station_code']
+            file_name = f"{station_code}.csv"
+            station_df['measure_date'] = pd.to_datetime(station_df['measure_date']).dt.tz_localize(None)
+
+            csv_bytes = station_df.to_csv(index=False).encode('UTF-8')
             buffer = BytesIO(csv_bytes)
 
             self.minio_client.put_object(self.s3_bucket_name, file_name, buffer, len(csv_bytes))
@@ -124,17 +121,16 @@ class LabelStudioClientBootstrapper(LabelStudioClient):
             json_task = {
                 "data": {
                     "csv": f"s3://data/{station_code}.csv",
-                    "start_date": x.iloc[0]['measure_date'].strftime('%Y-%m-%d'),
-                    "end_date": x.iloc[-1]['measure_date'].strftime('%Y-%m-%d'),
-                    "number_of_datapoints": len(x),
+                    "start_date": station_df.iloc[0]['measure_date'].strftime('%Y-%m-%d'),
+                    "end_date": station_df.iloc[-1]['measure_date'].strftime('%Y-%m-%d'),
+                    "number_of_datapoints": len(station_df),
                     "station_code": station_code
                 }
             }
 
-            self.tasks.append(json_task)
+            tasks.append(json_task)
 
-        df.groupby('station_code').apply(lambda x: station_to_csv(x))
-
+        return tasks
 
 if __name__ == '__main__':
     load_dotenv()
@@ -143,7 +139,7 @@ if __name__ == '__main__':
     BASE_URL = os.getenv('LS_BASE_URL')
     API_KEY = os.getenv('LS_API_KEY')
     PROJECT_NAME = os.getenv('LS_PROJECT_NAME')
-    DAILY_SNOW_CSV_PATH = os.getenv('LS_DAILY_SNOW_CSV_PATH')
+    LABELED_TRAIN_DATA_PATH = os.getenv('LS_LABELED_TRAIN_DATA_PATH')
     LABEL_CONFIG_PATH = os.getenv('LS_LABEL_CONFIG_PATH')
 
     S3_USER = os.getenv('MINIO_ROOT_USER')
@@ -157,7 +153,7 @@ if __name__ == '__main__':
         base_url=BASE_URL,
         api_key=API_KEY,
         project_name=PROJECT_NAME,
-        daily_snow_csv_path=DAILY_SNOW_CSV_PATH,
+        labeled_train_data_path=LABELED_TRAIN_DATA_PATH,
         label_config_path=LABEL_CONFIG_PATH,
         s3_url=f'{S3_URL}:{S3_PORT}',
         s3_user=S3_USER,
@@ -166,5 +162,7 @@ if __name__ == '__main__':
         s3_bucket_name=S3_BUCKET_NAME
     )
 
-    ls.client.delete_all_projects()
+    logging.info(f'Deleting all projects...')
+    responses = ls.client.delete_all_projects()
+    logging.info(f'{len(responses)} project(s) have been deleted')
     ls.bootstrap_project()
