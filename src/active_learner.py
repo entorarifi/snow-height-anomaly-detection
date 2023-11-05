@@ -1,7 +1,8 @@
-import logging
 import os
 import re
 from io import BytesIO
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import keras
 import numpy as np
@@ -13,6 +14,7 @@ from dotenv import load_dotenv
 
 from label_studio_client import LabelStudioClient
 from utils import setup_logger
+import logging
 
 
 class MonteCarloDropout(keras.layers.Dropout):
@@ -44,8 +46,10 @@ class ActiveLearner(LabelStudioClient):
     MODEL_BATCH_SIZE = 64
     MODEL_EPOCHS = 10
 
-    def __init__(self, base_url, api_key, project_name):
+    def __init__(self, base_url, api_key, project_name, labeled_train_data_path, labeled_test_data_path):
         super().__init__(base_url, api_key, project_name)
+        self.labeled_train_data_path = labeled_train_data_path
+        self.labeled_test_data_path = labeled_test_data_path
 
     def preprocces(self, df):
         df[self.DATE_COLUMN] = pd.to_datetime(df[self.DATE_COLUMN])
@@ -202,14 +206,14 @@ class ActiveLearner(LabelStudioClient):
         train_dataset = self.create_dataset(features, targets, end_index=split_index, shuffle=True)
         val_dataset = self.create_dataset(features, targets, start_index=split_index, shuffle=True)
 
-        return train_dataset, val_dataset
+        return train_dataset, val_dataset, mean, std
 
     def simulate_data_label(self, task):
         # TODO: Should be extracted into a util function and not be a part of the active learning loop because
         #  it is considered that a human expert will label the data
         task_id = task['id']
         station_code = task['data']['station_code']
-        labeled_df = pd.read_csv(f'../data/labeled_daily/{station_code}.csv', index_col=False)
+        labeled_df = pd.read_csv(f'{self.labeled_train_data_path}/{station_code}.csv', index_col=False)
         # TODO: Remove this in favor of a unified generate_payload method
         labeled_df[self.DATE_COLUMN] = pd.to_datetime(labeled_df[self.DATE_COLUMN])
         payload = self.generate_payload(labeled_df)
@@ -272,7 +276,7 @@ class ActiveLearner(LabelStudioClient):
         layers.reverse()
 
         if summary:
-            logging.info('---------- Model summary ----------')
+            logging.info('=============================== Model Summary ===============================')
             for layer in layers:
                 layer_type = str(type(layer))
 
@@ -291,7 +295,6 @@ class ActiveLearner(LabelStudioClient):
         return keras.Sequential(layers)
 
     def predict(self, unlabeled_tasks, model):
-        # tasks = self.project.get_paginated_tasks(page_size=10, page=1)['tasks']
         data = {}
 
         for task in unlabeled_tasks:
@@ -307,31 +310,19 @@ class ActiveLearner(LabelStudioClient):
             else:
                 raise Exception(f'Failed to retrieve data: {response.status_code}')
 
-        # TODO: Predict with newly created model
-        # model = keras.models.load_model(
-        #     '../active-learning-results/2023-11-02/model.keras',
-        #     custom_objects={'MonteCarloDropout': MonteCarloDropout}
-        # )
-
         for k in data.keys():
-            # Preprocess
             df = self.preprocces(data[k]['df'])
-
-            # Get features and targets
             features, targets, _, _ = self.get_features_and_targets(df, target_column=None, split_percentage=1)
-
-            # Create dataset
             dataset = self.create_dataset(features, targets)
 
-            # Predict
             predictions, uncertainty_score = self.predict_with_uncertainty(model, dataset)
 
-            # Process predictions
+            logging.info(f'Station: {k}, Uncertainty Score: {uncertainty_score:.4f}')
+
             df[self.TARGET_COLUMN] = False
             df.loc[self.TARGET_START_INDEX:, self.TARGET_COLUMN] = predictions > 0.5
 
             payload = self.generate_payload(df)
-
             self.project.create_prediction(task_id=data[k]['task_id'], result=payload, score=float(uncertainty_score))
 
     def run_iteration(self):
@@ -343,8 +334,8 @@ class ActiveLearner(LabelStudioClient):
         # highest uncertainty score
         task = unlabeled_tasks[0] if len(labeled_tasks) == 0 else self.get_most_uncertain_prediction(unlabeled_tasks)
 
-        # TODO: Might not work in the initial run
-        logging.info(f"Most uncertain: {task['data']['station_code']} with a score of {task['predictions_score']:.2f}")
+        # TODO: Might not work in initial run
+        # logging.info(f"Most uncertain: {task['data']['station_code']} with a score of {task['predictions_score']:.2f}")
 
         # 2. Ask for labels.
         # TODO: This could potentially be a chrome notification or an email to annotators to label a specific station.
@@ -354,8 +345,11 @@ class ActiveLearner(LabelStudioClient):
 
         # 4. Parse and split labeled data. Refetch the tasks to include the newly labeled station data in the
         # train/validation dataset split
+        logging.info('=============================== Preparing Training Data ===============================')
         labeled_tasks = self.project.get_labeled_tasks()
-        train_dataset, val_dataset = self.create_train_val_datasets(labeled_tasks)
+        stations = ', '.join(task['data']['station_code'] for task in labeled_tasks)
+        logging.info(f'Stations: {stations}')
+        train_dataset, val_dataset, mean, std = self.create_train_val_datasets(labeled_tasks)
 
         # 5. Build model
         model = self.create_model()
@@ -364,9 +358,10 @@ class ActiveLearner(LabelStudioClient):
             metrics=self.MODEL_METRICS,
             loss=self.MODEL_LOSS
         )
-        model.summary()
+        # model.summary()
 
         # 6. Fit model
+        logging.info('=============================== Training Model ===============================')
         history = model.fit(
             train_dataset,
             epochs=self.MODEL_EPOCHS,
@@ -374,9 +369,28 @@ class ActiveLearner(LabelStudioClient):
             validation_data=val_dataset
         )
 
-        # 7. Predict and assign uncertainty scores for unlabeled tasks
+        # 7. Evaluate model on test data
+        logging.info('=============================== Evaluating Model on Test Data ===============================')
+        files = os.listdir(self.labeled_test_data_path)
+
+        for f in files:
+            test_df = pd.read_csv(os.path.join(self.labeled_test_data_path, f), index_col=False)
+            test_df = self.preprocces(test_df)
+            station_name = test_df.iloc[0]['station_code']
+
+            features, targets, _, _ = self.get_features_and_targets(test_df, split_percentage=1, mean=mean, std=std)
+            test_dataset = self.create_dataset(features, targets)
+
+            evaluation_results = model.evaluate(test_dataset, verbose=0)
+            logging.info(
+                f'Station: {station_name}, Samples: {len(test_df)}, Loss: {evaluation_results[0]:.2f}, Accuracy: {evaluation_results[1]:.2f}')
+
+        # 8. Predict and assign uncertainty scores for unlabeled tasks
+        logging.info('=============================== Assigning Uncertainty Scores ===============================')
         unlabeled_tasks = self.project.get_unlabeled_tasks()
         self.predict(unlabeled_tasks, model)
+
+        logging.info('=============================== Done ===============================')
 
     def display_time_series(self, task):
         df = self.parse_df(task)
@@ -397,6 +411,7 @@ class ActiveLearner(LabelStudioClient):
         fig.show()
 
     def purge_annotations(self):
+        logging.info('=============================== Purging Annotations ===============================')
         # TODO: Replace localhost with env variable
         url = f'http://localhost:8080/api/dm/actions?id=delete_tasks_annotations&project={self.project_id}'
 
@@ -404,23 +419,28 @@ class ActiveLearner(LabelStudioClient):
 
         if response.status_code == 200:
             json_response = response.json()
-            logging.info(f"Annotations were purged. Total: {json_response['processed_items']}")
+            logging.info(f"{json_response['processed_items']} annotation(s) have been purged")
         else:
             raise Exception(f'Failed to purge annotations: {response.status_code}')
 
 
 if __name__ == '__main__':
     load_dotenv()
-    logging = setup_logger(level=logging.DEBUG)
+    logging = setup_logger()
 
     BASE_URL = os.getenv('LS_BASE_URL')
     API_KEY = os.getenv('LS_API_KEY')
     PROJECT_NAME = os.getenv('LS_PROJECT_NAME')
 
+    LABELED_TRAIN_DATA_PATH = os.getenv('LS_LABELED_TRAIN_DATA_PATH')
+    LABELED_TEST_DATA_PATH = os.getenv('LS_LABELED_TEST_DATA_PATH')
+
     active_learner = ActiveLearner(
         base_url=BASE_URL,
         api_key=API_KEY,
         project_name=PROJECT_NAME,
+        labeled_train_data_path=LABELED_TRAIN_DATA_PATH,
+        labeled_test_data_path=LABELED_TEST_DATA_PATH
     )
 
     # Set initial predictions
