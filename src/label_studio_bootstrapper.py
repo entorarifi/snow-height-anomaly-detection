@@ -132,6 +132,7 @@ class LabelStudioClientBootstrapper(LabelStudioClient):
 
         return tasks
 
+
 if __name__ == '__main__':
     load_dotenv()
     logging = setup_logger()

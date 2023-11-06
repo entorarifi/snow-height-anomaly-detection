@@ -10,11 +10,14 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import requests
+import time
 from dotenv import load_dotenv
 
 from label_studio_client import LabelStudioClient
-from utils import setup_logger
+from utils import setup_logger, format_with_border, measure_execution_time
 import logging
+
+import mlflow
 
 
 class MonteCarloDropout(keras.layers.Dropout):
@@ -46,10 +49,25 @@ class ActiveLearner(LabelStudioClient):
     MODEL_BATCH_SIZE = 64
     MODEL_EPOCHS = 10
 
-    def __init__(self, base_url, api_key, project_name, labeled_train_data_path, labeled_test_data_path):
+    def __init__(
+            self,
+            base_url,
+            api_key,
+            project_name,
+            labeled_train_data_path,
+            labeled_test_data_path,
+            mlflow_tracking_url,
+            mlflow_experiment_name,
+            logging_tmp_log_file
+    ):
         super().__init__(base_url, api_key, project_name)
         self.labeled_train_data_path = labeled_train_data_path
         self.labeled_test_data_path = labeled_test_data_path
+        self.logging_tmp_log_file = logging_tmp_log_file
+
+        mlflow.set_tracking_uri(mlflow_tracking_url)
+        mlflow.set_experiment(mlflow_experiment_name)
+        mlflow.tensorflow.autolog()
 
     def preprocces(self, df):
         df[self.DATE_COLUMN] = pd.to_datetime(df[self.DATE_COLUMN])
@@ -115,15 +133,12 @@ class ActiveLearner(LabelStudioClient):
         return predictions.mean(axis=0).reshape(-1), scaled_uncertainty.mean()
 
     def generate_payload(self, df):
-        # Mark the start and end of each range
         df['start_range'] = df[self.TARGET_COLUMN] & (~df[self.TARGET_COLUMN].shift(1, fill_value=False))
         df['end_range'] = df[self.TARGET_COLUMN] & (~df[self.TARGET_COLUMN].shift(-1, fill_value=False))
 
-        # Get start dates and end dates
         start_dates = df[df['start_range']][self.DATE_COLUMN]
         end_dates = df[df['end_range']][self.DATE_COLUMN].reset_index(drop=True)
 
-        # Generate payload for dataset
         payload = [
             {
                 "type": "timeserieslabels",
@@ -154,7 +169,6 @@ class ActiveLearner(LabelStudioClient):
         return most_uncertain
 
     def parse_df(self, task):
-        # TODO: Test whether dfs are being parsed accordingly
         path = task['data']['csv']
         labels = task['annotations'][-1]['result']
 
@@ -201,6 +215,9 @@ class ActiveLearner(LabelStudioClient):
         logging.info(f'Training samples: {len(train_df)}')
         logging.info(f'Validation samples: {len(val_df)}')
 
+        mlflow.log_param('al_training_samples', len(train_df))
+        mlflow.log_param('al_validation_samples', len(val_df))
+
         features, targets, mean, std = self.get_features_and_targets(combined_df, split_index)
 
         train_dataset = self.create_dataset(features, targets, end_index=split_index, shuffle=True)
@@ -209,12 +226,9 @@ class ActiveLearner(LabelStudioClient):
         return train_dataset, val_dataset, mean, std
 
     def simulate_data_label(self, task):
-        # TODO: Should be extracted into a util function and not be a part of the active learning loop because
-        #  it is considered that a human expert will label the data
         task_id = task['id']
         station_code = task['data']['station_code']
         labeled_df = pd.read_csv(f'{self.labeled_train_data_path}/{station_code}.csv', index_col=False)
-        # TODO: Remove this in favor of a unified generate_payload method
         labeled_df[self.DATE_COLUMN] = pd.to_datetime(labeled_df[self.DATE_COLUMN])
         payload = self.generate_payload(labeled_df)
         self.project.create_annotation(task_id, result=payload)
@@ -276,7 +290,7 @@ class ActiveLearner(LabelStudioClient):
         layers.reverse()
 
         if summary:
-            logging.info('=============================== Model Summary ===============================')
+            logging.info(format_with_border('Model Summary'))
             for layer in layers:
                 layer_type = str(type(layer))
 
@@ -325,71 +339,113 @@ class ActiveLearner(LabelStudioClient):
             self.project.create_prediction(task_id=data[k]['task_id'], result=payload, score=float(uncertainty_score))
 
     def run_iteration(self):
-        labeled_tasks = self.project.get_labeled_tasks(only_ids=True)
-        unlabeled_tasks = self.project.get_unlabeled_tasks()
-        # task = random.choice(unlabeled_tasks)
+        iteration_start_time = time.time()
+        iteration = 2
 
-        # 1. Pick a random station to label if this is the first iteration; otherwise, choose the one with the
-        # highest uncertainty score
-        task = unlabeled_tasks[0] if len(labeled_tasks) == 0 else self.get_most_uncertain_prediction(unlabeled_tasks)
+        with mlflow.start_run(run_name=f'Iteration {iteration}'):
+            mlflow.log_param('al_iteration', iteration)
+            logging.info(format_with_border(f'Iteration {iteration}'))
 
-        # TODO: Might not work in initial run
-        # logging.info(f"Most uncertain: {task['data']['station_code']} with a score of {task['predictions_score']:.2f}")
+            labeled_tasks = self.project.get_labeled_tasks(only_ids=True)
+            unlabeled_tasks = self.project.get_unlabeled_tasks()
+            # task = random.choice(unlabeled_tasks)
 
-        # 2. Ask for labels.
-        # TODO: This could potentially be a chrome notification or an email to annotators to label a specific station.
+            mlflow.log_param('al_labeled_tasks', len(labeled_tasks))
+            mlflow.log_param('al_unlabeled_tasks', len(unlabeled_tasks))
 
-        # 3. Label data
-        self.simulate_data_label(task)
+            # 1. Pick a random station to label if this is the first iteration; otherwise, choose the one with the
+            # highest uncertainty score
+            task = unlabeled_tasks[0] if len(labeled_tasks) == 0 else self.get_most_uncertain_prediction(unlabeled_tasks)
 
-        # 4. Parse and split labeled data. Refetch the tasks to include the newly labeled station data in the
-        # train/validation dataset split
-        logging.info('=============================== Preparing Training Data ===============================')
-        labeled_tasks = self.project.get_labeled_tasks()
-        stations = ', '.join(task['data']['station_code'] for task in labeled_tasks)
-        logging.info(f'Stations: {stations}')
-        train_dataset, val_dataset, mean, std = self.create_train_val_datasets(labeled_tasks)
+            logging.info(f"Active Station: {task['data']['station_code']}")
+            mlflow.log_param('al_active_station', task['data']['station_code'])
 
-        # 5. Build model
-        model = self.create_model()
-        model.compile(
-            optimizer=self.MODEL_OPTIMIZER,
-            metrics=self.MODEL_METRICS,
-            loss=self.MODEL_LOSS
-        )
-        # model.summary()
+            # 2. Ask for labels.
 
-        # 6. Fit model
-        logging.info('=============================== Training Model ===============================')
-        history = model.fit(
-            train_dataset,
-            epochs=self.MODEL_EPOCHS,
-            batch_size=self.MODEL_BATCH_SIZE,
-            validation_data=val_dataset
-        )
+            # 3. Label data
+            self.simulate_data_label(task)
 
-        # 7. Evaluate model on test data
-        logging.info('=============================== Evaluating Model on Test Data ===============================')
-        files = os.listdir(self.labeled_test_data_path)
+            # 4. Parse and split labeled data. Refetch the tasks to include the newly labeled station data in the
+            # train/validation dataset split
+            logging.info(format_with_border('Preparing Training Data'))
+            labeled_tasks = self.project.get_labeled_tasks()
+            stations = ', '.join(task['data']['station_code'] for task in labeled_tasks)
+            logging.info(f'Stations: {stations}')
+            mlflow.log_param('al_training_station_names', stations.split(', '))
+            mlflow.log_param('al_training_split_percentage', self.SPLIT_PERCENTAGE)
+            train_dataset, val_dataset, mean, std = self.create_train_val_datasets(labeled_tasks)
 
-        for f in files:
-            test_df = pd.read_csv(os.path.join(self.labeled_test_data_path, f), index_col=False)
-            test_df = self.preprocces(test_df)
-            station_name = test_df.iloc[0]['station_code']
+            # 5. Build model
+            model = self.create_model()
+            model.compile(
+                optimizer=self.MODEL_OPTIMIZER,
+                metrics=self.MODEL_METRICS,
+                loss=self.MODEL_LOSS
+            )
 
-            features, targets, _, _ = self.get_features_and_targets(test_df, split_percentage=1, mean=mean, std=std)
-            test_dataset = self.create_dataset(features, targets)
+            # 6. Fit model
+            logging.info(format_with_border('Training Model'))
 
-            evaluation_results = model.evaluate(test_dataset, verbose=0)
-            logging.info(
-                f'Station: {station_name}, Samples: {len(test_df)}, Loss: {evaluation_results[0]:.2f}, Accuracy: {evaluation_results[1]:.2f}')
+            @measure_execution_time
+            def fit_model():
+                model.fit(
+                    train_dataset,
+                    epochs=self.MODEL_EPOCHS,
+                    batch_size=self.MODEL_BATCH_SIZE,
+                    validation_data=val_dataset
+                )
 
-        # 8. Predict and assign uncertainty scores for unlabeled tasks
-        logging.info('=============================== Assigning Uncertainty Scores ===============================')
-        unlabeled_tasks = self.project.get_unlabeled_tasks()
-        self.predict(unlabeled_tasks, model)
+            history, elapsed_fitting_time = fit_model()
 
-        logging.info('=============================== Done ===============================')
+            logging.info(f'Model fitting completed in {elapsed_fitting_time} minutes')
+            mlflow.log_param('al_model_fitting_time', elapsed_fitting_time)
+
+            # 7. Evaluate model on test data
+            logging.info(format_with_border('Evaluating Model on Test Data'))
+            files = os.listdir(self.labeled_test_data_path)
+
+            all_evaluation_results = np.empty((0, 2), float)
+
+            for i, f in enumerate(files):
+                test_df = pd.read_csv(os.path.join(self.labeled_test_data_path, f), index_col=False)
+                test_df = self.preprocces(test_df)
+                station_name = test_df.iloc[0]['station_code']
+
+                features, targets, _, _ = self.get_features_and_targets(test_df, split_percentage=1, mean=mean, std=std)
+                test_dataset = self.create_dataset(features, targets)
+
+                evaluation_results = model.evaluate(test_dataset, verbose=0)
+                logging.info(f'Station: {station_name}, Samples: {len(test_df)}, Loss: {evaluation_results[0]:.2f}, Accuracy: {evaluation_results[1]:.2f}')
+
+                # TODO: Remove this since nested experiment is removed
+                # mlflow.log_param('al_test_station', station_name)
+                # mlflow.log_param('al_test_test_samples', len(test_df))
+
+                # mlflow.log_metric(f"test_{station_name}_loss", evaluation_results[0], step=iteration)
+                # mlflow.log_metric(f"test_{station_name}_accuracy", evaluation_results[1], step=iteration)
+                #
+                all_evaluation_results = np.append(all_evaluation_results, [evaluation_results], axis=0)
+
+            average_loss = np.mean(all_evaluation_results[:, 0])
+            average_accuracy = np.mean(all_evaluation_results[:, 1])
+
+            mlflow.log_metric('test_avg_loss', average_loss, step=iteration)
+            mlflow.log_metric('test_avg_accuracy', average_accuracy, step=iteration)
+
+            # 8. Predict and assign uncertainty scores for unlabeled tasks
+            # TODO: Log uncertainty scores
+            logging.info(format_with_border('Assigning Uncertainty Scores'))
+            unlabeled_tasks = self.project.get_unlabeled_tasks()
+            self.predict(unlabeled_tasks, model)
+
+            logging.info(format_with_border('Done'))
+            iteration_duration = time.time() - iteration_start_time
+            minutes, seconds = divmod(iteration_duration, 60)
+            formatted_time = f"{int(minutes)}:{int(seconds):02d}"
+            logging.info(f'Iteration completed in {formatted_time} minutes')
+            mlflow.log_param('al_iteration_completion_time', formatted_time)
+
+            mlflow.log_artifact(tmp_log_file)
 
     def display_time_series(self, task):
         df = self.parse_df(task)
@@ -410,7 +466,7 @@ class ActiveLearner(LabelStudioClient):
         fig.show()
 
     def purge_annotations(self):
-        logging.info('=============================== Purging Annotations ===============================')
+        logging.info(format_with_border('Purging Annotations'))
         url = f'{self.base_url}/api/dm/actions?id=delete_tasks_annotations&project={self.project_id}'
 
         response = requests.post(url=url, headers=self.headers)
@@ -424,7 +480,7 @@ class ActiveLearner(LabelStudioClient):
 
 if __name__ == '__main__':
     load_dotenv()
-    logging = setup_logger()
+    logging, tmp_log_file = setup_logger(log_file='active_learning_run.log')
 
     BASE_URL = os.getenv('LS_BASE_URL')
     API_KEY = os.getenv('LS_API_KEY')
@@ -433,12 +489,18 @@ if __name__ == '__main__':
     LABELED_TRAIN_DATA_PATH = os.getenv('LS_LABELED_TRAIN_DATA_PATH')
     LABELED_TEST_DATA_PATH = os.getenv('LS_LABELED_TEST_DATA_PATH')
 
+    MLFLOW_PORT = os.getenv('MLFLOW_PORT')
+    MLFLOW_URI = f'http://localhost:{MLFLOW_PORT}'
+
     active_learner = ActiveLearner(
         base_url=BASE_URL,
         api_key=API_KEY,
         project_name=PROJECT_NAME,
         labeled_train_data_path=LABELED_TRAIN_DATA_PATH,
-        labeled_test_data_path=LABELED_TEST_DATA_PATH
+        labeled_test_data_path=LABELED_TEST_DATA_PATH,
+        mlflow_tracking_url=MLFLOW_URI,
+        mlflow_experiment_name="No Snow Classification",
+        logging_tmp_log_file=tmp_log_file
     )
 
     # Set initial predictions
