@@ -56,7 +56,7 @@ def format_with_border(message, total_length=100):
     return f'{border} {message} {border}'
 
 
-def get_iteration(file_path):
+def get_iteration(file_path='../active-learning.json'):
     if not os.path.exists(file_path):
         return {'iteration': 0, 'last_execution_date': None}
 
@@ -68,17 +68,20 @@ def get_iteration(file_path):
             return {'iteration': 0, 'last_execution_date': None}
 
 
-def increment_iteration(file_path):
-    obj = get_iteration(file_path)
+def get_and_increment_iteration(file_path='../active-learning.json'):
+    iteration_json = get_iteration(file_path)
 
     with open(file_path, 'a+') as file:
-        obj['iteration'] += 1
-        obj['last_execution_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        updated_iteration_json = iteration_json.copy()
+        updated_iteration_json['iteration'] += 1
+        updated_iteration_json['last_execution_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         file.seek(0)
         file.truncate()
 
-        json.dump(obj, file)
+        json.dump(updated_iteration_json, file)
+
+    return iteration_json
 
 #
 # if __name__ == '__main__':

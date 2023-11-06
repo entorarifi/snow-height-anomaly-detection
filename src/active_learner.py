@@ -14,7 +14,7 @@ import time
 from dotenv import load_dotenv
 
 from label_studio_client import LabelStudioClient
-from utils import setup_logger, format_with_border, measure_execution_time
+from utils import setup_logger, format_with_border, measure_execution_time, get_and_increment_iteration
 import logging
 
 import mlflow
@@ -340,7 +340,7 @@ class ActiveLearner(LabelStudioClient):
 
     def run_iteration(self):
         iteration_start_time = time.time()
-        iteration = 2
+        iteration = get_and_increment_iteration()['iteration']
 
         with mlflow.start_run(run_name=f'Iteration {iteration}'):
             mlflow.log_param('al_iteration', iteration)
@@ -499,10 +499,10 @@ if __name__ == '__main__':
         labeled_train_data_path=LABELED_TRAIN_DATA_PATH,
         labeled_test_data_path=LABELED_TEST_DATA_PATH,
         mlflow_tracking_url=MLFLOW_URI,
-        mlflow_experiment_name="No Snow Classification",
+        mlflow_experiment_name="No Snow Classification 3",
         logging_tmp_log_file=tmp_log_file
     )
 
     # Set initial predictions
-    # active_learner.purge_annotations()
+    active_learner.purge_annotations()
     active_learner.run_iteration()
