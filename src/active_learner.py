@@ -1,5 +1,7 @@
+import json
 import os
 import re
+from datetime import datetime
 from io import BytesIO
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -14,7 +16,7 @@ import time
 from dotenv import load_dotenv
 
 from label_studio_client import LabelStudioClient
-from utils import setup_logger, format_with_border, measure_execution_time, get_and_increment_iteration
+from utils import setup_logger, format_with_border, measure_execution_time
 import logging
 
 import mlflow
@@ -47,7 +49,7 @@ class ActiveLearner(LabelStudioClient):
     MODEL_METRICS = ['accuracy']
     MODEL_LOSS = 'binary_crossentropy'
     MODEL_BATCH_SIZE = 64
-    MODEL_EPOCHS = 10
+    MODEL_EPOCHS = 20
 
     def __init__(
             self,
@@ -58,12 +60,14 @@ class ActiveLearner(LabelStudioClient):
             labeled_test_data_path,
             mlflow_tracking_url,
             mlflow_experiment_name,
-            logging_tmp_log_file
+            logging_tmp_log_file,
+            iteration_file_path
     ):
         super().__init__(base_url, api_key, project_name)
         self.labeled_train_data_path = labeled_train_data_path
         self.labeled_test_data_path = labeled_test_data_path
         self.logging_tmp_log_file = logging_tmp_log_file
+        self.iteration_file_path = iteration_file_path
 
         mlflow.set_tracking_uri(mlflow_tracking_url)
         mlflow.set_experiment(mlflow_experiment_name)
@@ -340,10 +344,27 @@ class ActiveLearner(LabelStudioClient):
 
     def run_iteration(self):
         iteration_start_time = time.time()
-        iteration = get_and_increment_iteration()['iteration']
+        iteration = self.get_and_increment_iteration()['iteration']
 
         with mlflow.start_run(run_name=f'Iteration {iteration}'):
+            mlflow.log_param('al_sequence_length', self.SEQUENCE_LENGTH)
+            mlflow.log_param('al_target_start_index', self.TARGET_START_INDEX)
+            mlflow.log_param('al_feature_columns', self.FEATURE_COLUMNS)
+            mlflow.log_param('al_target_column', self.TARGET_COLUMN)
+            mlflow.log_param('al_date_column', self.DATE_COLUMN)
+            mlflow.log_param('al_split_percentage', self.SPLIT_PERCENTAGE)
+            mlflow.log_param('al_dataset_batch_size', self.DATASET_BATCH_SIZE)
+            mlflow.log_param('al_uncertainty_iterations', self.UNCERTAINTY_ITERATIONS)
+            mlflow.log_param('al_model_architecture', self.MODEL_ARCHITECTURE)
+            mlflow.log_param('al_model_input_shape', self.MODEL_INPUT_SHAPE)
+            mlflow.log_param('al_model_dropout_rate', self.MODEL_DROPOUT_RATE)
+            mlflow.log_param('al_model_optimizer', self.MODEL_OPTIMIZER)
+            mlflow.log_param('al_model_metrics', self.MODEL_METRICS)
+            mlflow.log_param('al_model_loss', self.MODEL_LOSS)
+            mlflow.log_param('al_model_batch_size', self.MODEL_BATCH_SIZE)
+            mlflow.log_param('al_model_epochs', self.MODEL_EPOCHS)
             mlflow.log_param('al_iteration', iteration)
+
             logging.info(format_with_border(f'Iteration {iteration}'))
 
             labeled_tasks = self.project.get_labeled_tasks(only_ids=True)
@@ -355,7 +376,8 @@ class ActiveLearner(LabelStudioClient):
 
             # 1. Pick a random station to label if this is the first iteration; otherwise, choose the one with the
             # highest uncertainty score
-            task = unlabeled_tasks[0] if len(labeled_tasks) == 0 else self.get_most_uncertain_prediction(unlabeled_tasks)
+            task = unlabeled_tasks[0] if len(labeled_tasks) == 0 else self.get_most_uncertain_prediction(
+                unlabeled_tasks)
 
             logging.info(f"Active Station: {task['data']['station_code']}")
             mlflow.log_param('al_active_station', task['data']['station_code'])
@@ -371,7 +393,7 @@ class ActiveLearner(LabelStudioClient):
             labeled_tasks = self.project.get_labeled_tasks()
             stations = ', '.join(task['data']['station_code'] for task in labeled_tasks)
             logging.info(f'Stations: {stations}')
-            mlflow.log_param('al_training_station_names', stations.split(', '))
+            mlflow.log_param('al_training_station_names', stations)
             mlflow.log_param('al_training_split_percentage', self.SPLIT_PERCENTAGE)
             train_dataset, val_dataset, mean, std = self.create_train_val_datasets(labeled_tasks)
 
@@ -415,7 +437,8 @@ class ActiveLearner(LabelStudioClient):
                 test_dataset = self.create_dataset(features, targets)
 
                 evaluation_results = model.evaluate(test_dataset, verbose=0)
-                logging.info(f'Station: {station_name}, Samples: {len(test_df)}, Loss: {evaluation_results[0]:.2f}, Accuracy: {evaluation_results[1]:.2f}')
+                logging.info(
+                    f'Station: {station_name}, Samples: {len(test_df)}, Loss: {evaluation_results[0]:.2f}, Accuracy: {evaluation_results[1]:.2f}')
 
                 # TODO: Remove this since nested experiment is removed
                 # mlflow.log_param('al_test_station', station_name)
@@ -466,16 +489,49 @@ class ActiveLearner(LabelStudioClient):
         fig.show()
 
     def purge_annotations(self):
-        logging.info(format_with_border('Purging Annotations'))
+        logging.info(format_with_border('Resetting environment'))
         url = f'{self.base_url}/api/dm/actions?id=delete_tasks_annotations&project={self.project_id}'
 
         response = requests.post(url=url, headers=self.headers)
 
         if response.status_code == 200:
             json_response = response.json()
-            logging.info(f"{json_response['processed_items']} annotation(s) have been purged")
+            logging.info(f"{json_response['processed_items']} annotation(s) were purged")
         else:
             raise Exception(f'Failed to purge annotations: {response.status_code}')
+
+    def get_iteration(self):
+        if not os.path.exists(self.iteration_file_path):
+            return {'iteration': 0, 'last_execution_date': None}
+
+        with open(self.iteration_file_path, 'r') as file:
+            try:
+                json_content = json.load(file)
+                return json_content
+            except json.JSONDecodeError:
+                return {'iteration': 0, 'last_execution_date': None}
+
+    def get_and_increment_iteration(self):
+        iteration_json = self.get_iteration()
+
+        with open(self.iteration_file_path, 'a+') as file:
+            updated_iteration_json = iteration_json.copy()
+            updated_iteration_json['iteration'] += 1
+            updated_iteration_json['last_execution_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            file.seek(0)
+            file.truncate()
+
+            json.dump(updated_iteration_json, file)
+
+        return iteration_json
+
+    def reset_iteration(self):
+        try:
+            os.remove(self.iteration_file_path)
+            logging.info(f'Iteration file has been reset')
+        except FileNotFoundError:
+            logging.error(f'The file {self.iteration_file_path} does not exist')
 
 
 if __name__ == '__main__':
@@ -499,10 +555,11 @@ if __name__ == '__main__':
         labeled_train_data_path=LABELED_TRAIN_DATA_PATH,
         labeled_test_data_path=LABELED_TEST_DATA_PATH,
         mlflow_tracking_url=MLFLOW_URI,
-        mlflow_experiment_name="No Snow Classification 3",
-        logging_tmp_log_file=tmp_log_file
+        mlflow_experiment_name="Snow Height Anomaly Detection",
+        logging_tmp_log_file=tmp_log_file,
+        iteration_file_path='../active-learning.json'
     )
 
-    # Set initial predictions
-    active_learner.purge_annotations()
+    # active_learner.purge_annotations()
+    # active_learner.reset_iteration()
     active_learner.run_iteration()
