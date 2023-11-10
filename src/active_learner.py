@@ -21,13 +21,6 @@ import logging
 
 import mlflow
 
-
-# TODO: Need to test if predictions work if we remove the class
-# class MonteCarloDropout(keras.layers.Dropout):
-#     def call(self, inputs, training=None):
-#         return super().call(inputs, training=True)
-
-
 # noinspection PyDefaultArgument
 class ActiveLearner(LabelStudioClient):
     # Dataset preparation and feature engineering
@@ -282,7 +275,7 @@ class ActiveLearner(LabelStudioClient):
                 )
 
             history, elapsed_fitting_time = fit_model()
-            logging.info(f'Model fitting completed in {elapsed_fitting_time} minutes')
+            logging.info(f'Model fitting completed in {elapsed_fitting_time}')
             mlflow.log_param('al_model_fitting_time', elapsed_fitting_time)
 
             # 7. Evaluate model on test data
@@ -299,8 +292,8 @@ class ActiveLearner(LabelStudioClient):
             logging.info(format_with_border('Done'))
             iteration_duration = time.time() - iteration_start_time
             minutes, seconds = divmod(iteration_duration, 60)
-            formatted_time = f"{int(minutes)}:{int(seconds):02d}"
-            logging.info(f'Iteration completed in {formatted_time} minutes')
+            formatted_time = f"{int(minutes)}m{int(seconds)}s"
+            logging.info(f'Iteration completed in {formatted_time}')
             mlflow.log_param('al_iteration_completion_time', formatted_time)
 
             mlflow.log_artifact(tmp_log_file)

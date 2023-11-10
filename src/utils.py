@@ -43,7 +43,8 @@ def measure_execution_time(func):
         result = func(*args, **kwargs)
         duration = time.time() - start_time
         minutes, seconds = divmod(duration, 60)
-        formatted_time = f"{int(minutes)}:{int(seconds):02d}"
+        formatted_time = f"{int(minutes)}m{int(seconds)}s"
+
         return result, formatted_time
 
     return wrapper
