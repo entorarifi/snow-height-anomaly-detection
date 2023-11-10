@@ -313,18 +313,24 @@ def create_train_val_datasets(
     return train_dataset, val_dataset, mean, std
 
 
+def create_test_dataset(
+        df, feature_columns, target_column, sequence_length, target_start_index, batch_size, mean, std
+):
+    df = preprocces(df)
+    features, targets, _, _ = get_features_and_targets(df, None, feature_columns, target_column, mean, std)
+    test_dataset = create_dataset(features, targets, sequence_length, target_start_index, batch_size)
+    return test_dataset
+
+
 def create_test_datasets(
         dfs, feature_columns, target_column, sequence_length, target_start_index, batch_size, mean, std
 ):
-    test_datasets = []
-
-    for df in dfs:
-        df = preprocces(df)
-        features, targets, _, _ = get_features_and_targets(df, None, feature_columns, target_column, mean, std)
-        test_datasets.append(create_dataset(features, targets, sequence_length, target_start_index, batch_size))
-
-    return test_datasets
-
+    return [
+        create_test_dataset(
+            df, feature_columns, target_column, sequence_length, target_start_index, batch_size, mean, std
+        )
+        for df in dfs
+    ]
 
 def load_stations_from_path(path):
     files = os.listdir(path)
