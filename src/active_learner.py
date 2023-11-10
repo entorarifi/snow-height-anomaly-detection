@@ -21,6 +21,7 @@ import logging
 
 import mlflow
 
+
 # noinspection PyDefaultArgument
 class ActiveLearner(LabelStudioClient):
     # Dataset preparation and feature engineering
@@ -67,6 +68,15 @@ class ActiveLearner(LabelStudioClient):
         mlflow.set_tracking_uri(mlflow_tracking_url)
         mlflow.set_experiment(mlflow_experiment_name)
         mlflow.tensorflow.autolog()
+
+    def log_parameters(self, iteration):
+        for attr in dir(self):
+            if attr.isupper():
+                value = getattr(self, attr)
+                logging.info(f'{attr}: {value}')
+                mlflow.log_param(f'al_{attr.lower()}', value)
+
+        mlflow.log_param('al_iteration', iteration)
 
     def generate_prediction_payload(self, df):
         df['start_range'] = df[self.TARGET_COLUMN] & (~df[self.TARGET_COLUMN].shift(1, fill_value=False))
@@ -170,7 +180,8 @@ class ActiveLearner(LabelStudioClient):
                 std
             )
 
-            predictions, uncertainty_score = predict_with_uncertainty(model, dataset, n_iter=self.UNCERTAINTY_ITERATIONS)
+            predictions, uncertainty_score = predict_with_uncertainty(model, dataset,
+                                                                      n_iter=self.UNCERTAINTY_ITERATIONS)
 
             logging.info(f'Station: {k}, Uncertainty Score: {uncertainty_score:.4f}')
 
@@ -185,25 +196,8 @@ class ActiveLearner(LabelStudioClient):
         iteration = self.get_and_increment_iteration()['iteration']
 
         with mlflow.start_run(run_name=f'Iteration {iteration}'):
-            mlflow.log_param('al_sequence_length', self.SEQUENCE_LENGTH)
-            mlflow.log_param('al_target_start_index', self.TARGET_START_INDEX)
-            mlflow.log_param('al_feature_columns', self.FEATURE_COLUMNS)
-            mlflow.log_param('al_target_column', self.TARGET_COLUMN)
-            mlflow.log_param('al_date_column', self.DATE_COLUMN)
-            mlflow.log_param('al_split_percentage', self.SPLIT_PERCENTAGE)
-            mlflow.log_param('al_dataset_batch_size', self.DATASET_BATCH_SIZE)
-            mlflow.log_param('al_uncertainty_iterations', self.UNCERTAINTY_ITERATIONS)
-            mlflow.log_param('al_model_architecture', self.MODEL_ARCHITECTURE)
-            mlflow.log_param('al_model_input_shape', self.MODEL_INPUT_SHAPE)
-            mlflow.log_param('al_model_dropout_rate', self.MODEL_DROPOUT_RATE)
-            mlflow.log_param('al_model_optimizer', self.MODEL_OPTIMIZER)
-            mlflow.log_param('al_model_metrics', self.MODEL_METRICS)
-            mlflow.log_param('al_model_loss', self.MODEL_LOSS)
-            mlflow.log_param('al_model_batch_size', self.MODEL_BATCH_SIZE)
-            mlflow.log_param('al_model_epochs', self.MODEL_EPOCHS)
-            mlflow.log_param('al_iteration', iteration)
-
             logging.info(format_with_border(f'Iteration {iteration}'))
+            self.log_parameters(iteration)
             logging.info(f"Model Architecture: {self.MODEL_ARCHITECTURE}")
 
             labeled_tasks = self.project.get_labeled_tasks(only_ids=True)
@@ -235,21 +229,22 @@ class ActiveLearner(LabelStudioClient):
             logging.info(f'Stations: {stations}')
             mlflow.log_param('al_training_station_names', stations)
             mlflow.log_param('al_training_split_percentage', self.SPLIT_PERCENTAGE)
-
             parsed_labeled_tasks = [self.parse_df(task) for task in labeled_tasks]
-            train_dataset, val_dataset, mean, std = create_train_val_datasets(
+            train_dataset, val_dataset, mean, std, _, num_train_samples, num_val_samples = create_train_val_datasets(
                 parsed_labeled_tasks,
                 self.SPLIT_PERCENTAGE,
                 self.FEATURE_COLUMNS,
                 self.TARGET_COLUMN,
                 self.SEQUENCE_LENGTH,
                 self.TARGET_START_INDEX,
-                self.DATASET_BATCH_SIZE,
-                logging,
-                mlflow
+                self.DATASET_BATCH_SIZE
             )
+            logging.info(f"Training samples: {num_train_samples}")
+            logging.info(f"Validation samples: {num_val_samples}")
+            mlflow.log_param('al_training_samples', num_train_samples)
+            mlflow.log_param('al_validation_samples', num_val_samples)
 
-            # 5. Build and Complie model
+            # 5. Build and compile model
             model = create_model(
                 architecture=self.MODEL_ARCHITECTURE,
                 input_shape=self.MODEL_INPUT_SHAPE,

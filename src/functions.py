@@ -297,9 +297,7 @@ def create_train_val_datasets(
         target_column,
         sequence_length,
         target_start_index,
-        batch_size,
-        logging=None,
-        mlflow=None
+        batch_size
 ):
     train_df, val_df = pd.DataFrame(), pd.DataFrame()
 
@@ -312,13 +310,6 @@ def create_train_val_datasets(
     combined_df = preprocces(pd.concat([train_df, val_df]))
     split_index = len(train_df)
 
-    # TODO: Move this to calling function
-    logging.info(f'Training samples: {len(train_df)}')
-    logging.info(f'Validation samples: {len(val_df)}')
-
-    mlflow.log_param('al_training_samples', len(train_df))
-    mlflow.log_param('al_validation_samples', len(val_df))
-
     features, targets, mean, std = get_features_and_targets(combined_df, split_index, feature_columns, target_column)
 
     train_dataset = create_dataset(
@@ -329,7 +320,7 @@ def create_train_val_datasets(
         features, targets, sequence_length, target_start_index, batch_size, start_index=split_index, shuffle=True
     )
 
-    return train_dataset, val_dataset, mean, std
+    return train_dataset, val_dataset, mean, std, len(train_df), len(val_df), combined_df
 
 
 def create_test_dataset(
