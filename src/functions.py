@@ -8,6 +8,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
+from src.utils import format_with_border
+
 
 class MonteCarloDropout(keras.layers.Dropout):
     def call(self, inputs, training=None):
@@ -106,7 +108,7 @@ def create_dataset(
     )
 
 
-def create_network(architecture, input_shape, dropout_rate=0.5, summary=True):
+def create_model(architecture, input_shape, dropout_rate, logging=None, summary=True):
     arch_split = architecture.split('-')
     dense = True
     bidirectional = False
@@ -157,21 +159,23 @@ def create_network(architecture, input_shape, dropout_rate=0.5, summary=True):
     layers.reverse()
 
     if summary:
+        logging.info(format_with_border('Model Summary'))
         for layer in layers:
             layer_type = str(type(layer))
 
             if 'Dense' in str(type(layer)):
-                print(type(layer), layer.units, layer.activation)
+                logging.info(type(layer), layer.units, layer.activation)
             elif 'Bidirectional' in str(type(layer)):
-                print(type(layer), layer.layer, layer.layer.units, layer.layer.activation, layer.layer.return_sequences)
+                logging.info(type(layer), layer.layer, layer.layer.units, layer.layer.activation,
+                             layer.layer.return_sequences)
             elif 'LSTM' in str(type(layer)):
-                print(type(layer), layer.units, layer.activation, layer.return_sequences)
+                logging.info(type(layer), layer.units, layer.activation, layer.return_sequences)
             elif 'GRU' in str(type(layer)):
-                print(type(layer), layer.units, layer.activation, layer.return_sequences)
+                logging.info(type(layer), layer.units, layer.activation, layer.return_sequences)
             elif 'Dropout' in layer_type:
-                print(type(layer), layer.rate)
+                logging.info(type(layer), layer.rate)
 
-    return layers
+    return keras.Sequential(layers)
 
 
 def plot_keras_history(history):
@@ -253,10 +257,10 @@ def plot_data(dfs, y='HS', target='no_snow', predictions=[]):
 
 
 def predict_with_uncertainty(model, x, n_iter=100):
-    preds = np.array([model.predict(x, verbose=0) for _ in range(n_iter)])
-    uncertainty = np.std(preds, axis=0)
+    predictions = np.array([model.predict(x, verbose=0) for _ in range(n_iter)])
+    uncertainty = np.std(predictions, axis=0)
     scaled_uncertainty = (uncertainty - uncertainty.min()) / (uncertainty.max() - uncertainty.min())
-    return scaled_uncertainty.mean()
+    return predictions.mean(axis=0).reshape(-1), scaled_uncertainty.mean()
 
 
 def check_gpus():
@@ -287,7 +291,15 @@ def preprocces(df):
 
 
 def create_train_val_datasets(
-        dfs, split_percentage, feature_columns, target_column, sequence_length, target_start_index, batch_size,
+        dfs,
+        split_percentage,
+        feature_columns,
+        target_column,
+        sequence_length,
+        target_start_index,
+        batch_size,
+        logging=None,
+        mlflow=None
 ):
     train_df, val_df = pd.DataFrame(), pd.DataFrame()
 
@@ -299,6 +311,13 @@ def create_train_val_datasets(
 
     combined_df = preprocces(pd.concat([train_df, val_df]))
     split_index = len(train_df)
+
+    # TODO: Move this to calling function
+    logging.info(f'Training samples: {len(train_df)}')
+    logging.info(f'Validation samples: {len(val_df)}')
+
+    mlflow.log_param('al_training_samples', len(train_df))
+    mlflow.log_param('al_validation_samples', len(val_df))
 
     features, targets, mean, std = get_features_and_targets(combined_df, split_index, feature_columns, target_column)
 

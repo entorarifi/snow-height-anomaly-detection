@@ -1,12 +1,12 @@
 import json
 import os
-import re
 from datetime import datetime
 from io import BytesIO
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-import keras
+from src.functions import create_model, preprocces, create_train_val_datasets, create_test_dataset, \
+    predict_with_uncertainty
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -22,9 +22,10 @@ import logging
 import mlflow
 
 
-class MonteCarloDropout(keras.layers.Dropout):
-    def call(self, inputs, training=None):
-        return super().call(inputs, training=True)
+# TODO: Need to test if predictions work if we remove the class
+# class MonteCarloDropout(keras.layers.Dropout):
+#     def call(self, inputs, training=None):
+#         return super().call(inputs, training=True)
 
 
 # noinspection PyDefaultArgument
@@ -42,14 +43,15 @@ class ActiveLearner(LabelStudioClient):
     UNCERTAINTY_ITERATIONS = 5
 
     # Model configuration
-    MODEL_ARCHITECTURE = "128(l)-64-8(d)-1"
+    # MODEL_ARCHITECTURE = "128(l)-64-8(d)-1"
+    MODEL_ARCHITECTURE = "64(l)-8(d)-1"
     MODEL_INPUT_SHAPE = (SEQUENCE_LENGTH, len(FEATURE_COLUMNS))
     MODEL_DROPOUT_RATE = 0.5
     MODEL_OPTIMIZER = 'adam'
     MODEL_METRICS = ['accuracy']
     MODEL_LOSS = 'binary_crossentropy'
     MODEL_BATCH_SIZE = 64
-    MODEL_EPOCHS = 20
+    MODEL_EPOCHS = 5
 
     def __init__(
             self,
@@ -73,70 +75,7 @@ class ActiveLearner(LabelStudioClient):
         mlflow.set_experiment(mlflow_experiment_name)
         mlflow.tensorflow.autolog()
 
-    def preprocces(self, df):
-        df[self.DATE_COLUMN] = pd.to_datetime(df[self.DATE_COLUMN])
-        df['year'] = df[self.DATE_COLUMN].dt.year
-        df['month'] = df[self.DATE_COLUMN].dt.month
-        df['day'] = df[self.DATE_COLUMN].dt.day
-        df['weekday'] = df[self.DATE_COLUMN].dt.weekday
-        df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
-        df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
-        df['day_sin'] = np.sin(2 * np.pi * df['day'] / 31)
-        df['day_cos'] = np.cos(2 * np.pi * df['day'] / 31)
-
-        return df
-
-    @staticmethod
-    def get_features_and_targets(
-            df,
-            split_percentage=SPLIT_PERCENTAGE,
-            feature_columns=FEATURE_COLUMNS,
-            target_column=TARGET_COLUMN,
-            scale=True,
-            mean=None,
-            std=None
-    ):
-        if (mean is None) ^ (std is None):
-            raise Exception('mean and std must both be set or unset')
-
-        features = df[feature_columns].values
-        targets = None if target_column is None else df[target_column].values
-
-        if not scale:
-            return features, targets, None, None
-
-        if mean is None:
-            num_train_samples = int(len(df) * split_percentage)
-            mean = features[:num_train_samples].mean(axis=0)
-            features -= mean
-            std = features[:num_train_samples].std(axis=0)
-            features /= std
-        else:
-            features = (features - mean) / std
-
-        return features, targets, mean, std
-
-    def create_dataset(self, features, targets, shuffle=False, start_index=None, end_index=None):
-        return keras.utils.timeseries_dataset_from_array(
-            data=features,
-            targets=None if targets is None else targets[self.TARGET_START_INDEX:],
-            sequence_length=self.SEQUENCE_LENGTH,
-            sequence_stride=1,
-            sampling_rate=1,
-            batch_size=self.DATASET_BATCH_SIZE,
-            shuffle=shuffle,
-            start_index=start_index,
-            end_index=end_index
-        )
-
-    @staticmethod
-    def predict_with_uncertainty(model, x, n_iter=UNCERTAINTY_ITERATIONS):
-        predictions = np.array([model.predict(x, verbose=0) for _ in range(n_iter)])
-        uncertainty = np.std(predictions, axis=0)
-        scaled_uncertainty = (uncertainty - uncertainty.min()) / (uncertainty.max() - uncertainty.min())
-        return predictions.mean(axis=0).reshape(-1), scaled_uncertainty.mean()
-
-    def generate_payload(self, df):
+    def generate_prediction_payload(self, df):
         df['start_range'] = df[self.TARGET_COLUMN] & (~df[self.TARGET_COLUMN].shift(1, fill_value=False))
         df['end_range'] = df[self.TARGET_COLUMN] & (~df[self.TARGET_COLUMN].shift(-1, fill_value=False))
 
@@ -202,117 +141,14 @@ class ActiveLearner(LabelStudioClient):
 
         return df
 
-    def create_train_val_datasets(self, tasks):
-        train_df, val_df = pd.DataFrame(), pd.DataFrame()
-
-        for task in tasks:
-            df = self.parse_df(task)
-
-            split_index = int(len(df) * self.SPLIT_PERCENTAGE)
-
-            train_df = pd.concat([train_df, df[:split_index]])
-            val_df = pd.concat([val_df, df[split_index:]])
-
-        combined_df = self.preprocces(pd.concat([train_df, val_df]))
-        split_index = len(train_df)
-
-        logging.info(f'Training samples: {len(train_df)}')
-        logging.info(f'Validation samples: {len(val_df)}')
-
-        mlflow.log_param('al_training_samples', len(train_df))
-        mlflow.log_param('al_validation_samples', len(val_df))
-
-        features, targets, mean, std = self.get_features_and_targets(combined_df, split_index)
-
-        train_dataset = self.create_dataset(features, targets, end_index=split_index, shuffle=True)
-        val_dataset = self.create_dataset(features, targets, start_index=split_index, shuffle=True)
-
-        return train_dataset, val_dataset, mean, std
-
     def simulate_data_label(self, task):
-        task_id = task['id']
         station_code = task['data']['station_code']
         labeled_df = pd.read_csv(f'{self.labeled_train_data_path}/{station_code}.csv', index_col=False)
         labeled_df[self.DATE_COLUMN] = pd.to_datetime(labeled_df[self.DATE_COLUMN])
-        payload = self.generate_payload(labeled_df)
-        self.project.create_annotation(task_id, result=payload)
 
-    @staticmethod
-    def create_model(
-            architecture=MODEL_ARCHITECTURE,
-            input_shape=MODEL_INPUT_SHAPE,
-            dropout_rate=MODEL_DROPOUT_RATE,
-            summary=False
-    ):
-        arch_split = architecture.split('-')
-        dense = True
-        bidirectional = False
-        layers = []
+        return labeled_df
 
-        digits_pattern = re.compile(r"\d+")
-
-        if 'l' in arch_split[0]:
-            rnn_layer = 'LSTM'
-        elif 'g' in arch_split[0]:
-            rnn_layer = 'GRU'
-        else:
-            raise Exception('rnn_layers must be one of [LSTM, GRU]')
-
-        if 'b' in arch_split[0]:
-            bidirectional = True
-
-        for i, layer in enumerate(reversed(arch_split)):
-            no_units = int(digits_pattern.findall(layer)[0])
-
-            if dense:
-                activation = 'sigmoid' if i == 0 else 'relu'
-                layers.append(keras.layers.Dense(no_units, activation=activation))
-            else:
-                args = {
-                    'units': no_units,
-                }
-
-                if '(d)' not in arch_split[-i]:
-                    args['return_sequences'] = True
-
-                if i == len(arch_split) - 1:
-                    args['input_shape'] = input_shape
-
-                current_layer = keras.layers.LSTM(**args) if rnn_layer == 'LSTM' else keras.layers.GRU(**args)
-
-                if bidirectional:
-                    current_layer = keras.layers.Bidirectional(current_layer)
-
-                layers.extend([
-                    MonteCarloDropout(dropout_rate),
-                    current_layer
-                ])
-
-            if '(d)' in layer:
-                dense = False
-
-        layers.reverse()
-
-        if summary:
-            logging.info(format_with_border('Model Summary'))
-            for layer in layers:
-                layer_type = str(type(layer))
-
-                if 'Dense' in str(type(layer)):
-                    logging.info(type(layer), layer.units, layer.activation)
-                elif 'Bidirectional' in str(type(layer)):
-                    logging.info(type(layer), layer.layer, layer.layer.units, layer.layer.activation,
-                                 layer.layer.return_sequences)
-                elif 'LSTM' in str(type(layer)):
-                    logging.info(type(layer), layer.units, layer.activation, layer.return_sequences)
-                elif 'GRU' in str(type(layer)):
-                    logging.info(type(layer), layer.units, layer.activation, layer.return_sequences)
-                elif 'Dropout' in layer_type:
-                    logging.info(type(layer), layer.rate)
-
-        return keras.Sequential(layers)
-
-    def predict(self, unlabeled_tasks, model):
+    def predict(self, unlabeled_tasks, model, mean, std):
         data = {}
 
         for task in unlabeled_tasks:
@@ -328,18 +164,27 @@ class ActiveLearner(LabelStudioClient):
                 raise Exception(f'Failed to retrieve data: {response.status_code}')
 
         for k in data.keys():
-            df = self.preprocces(data[k]['df'])
-            features, targets, _, _ = self.get_features_and_targets(df, target_column=None, split_percentage=1)
-            dataset = self.create_dataset(features, targets)
+            df = preprocces(data[k]['df'])
 
-            predictions, uncertainty_score = self.predict_with_uncertainty(model, dataset)
+            dataset = create_test_dataset(
+                df,
+                self.FEATURE_COLUMNS,
+                None,
+                self.SEQUENCE_LENGTH,
+                self.TARGET_START_INDEX,
+                self.DATASET_BATCH_SIZE,
+                mean,
+                std
+            )
+
+            predictions, uncertainty_score = predict_with_uncertainty(model, dataset, n_iter=self.UNCERTAINTY_ITERATIONS)
 
             logging.info(f'Station: {k}, Uncertainty Score: {uncertainty_score:.4f}')
 
             df[self.TARGET_COLUMN] = False
             df.loc[self.TARGET_START_INDEX:, self.TARGET_COLUMN] = predictions > 0.5
 
-            payload = self.generate_payload(df)
+            payload = self.generate_prediction_payload(df)
             self.project.create_prediction(task_id=data[k]['task_id'], result=payload, score=float(uncertainty_score))
 
     def run_iteration(self):
@@ -366,6 +211,7 @@ class ActiveLearner(LabelStudioClient):
             mlflow.log_param('al_iteration', iteration)
 
             logging.info(format_with_border(f'Iteration {iteration}'))
+            logging.info(f"Model Architecture: {self.MODEL_ARCHITECTURE}")
 
             labeled_tasks = self.project.get_labeled_tasks(only_ids=True)
             unlabeled_tasks = self.project.get_unlabeled_tasks()
@@ -385,7 +231,8 @@ class ActiveLearner(LabelStudioClient):
             # 2. Ask for labels.
 
             # 3. Label data
-            self.simulate_data_label(task)
+            payload = self.generate_prediction_payload(self.simulate_data_label(task))
+            self.project.create_annotation(task['id'], result=payload)
 
             # 4. Parse and split labeled data. Refetch the tasks to include the newly labeled station data in the
             # train/validation dataset split
@@ -395,14 +242,31 @@ class ActiveLearner(LabelStudioClient):
             logging.info(f'Stations: {stations}')
             mlflow.log_param('al_training_station_names', stations)
             mlflow.log_param('al_training_split_percentage', self.SPLIT_PERCENTAGE)
-            train_dataset, val_dataset, mean, std = self.create_train_val_datasets(labeled_tasks)
 
-            # 5. Build model
-            model = self.create_model()
+            parsed_labeled_tasks = [self.parse_df(task) for task in labeled_tasks]
+            train_dataset, val_dataset, mean, std = create_train_val_datasets(
+                parsed_labeled_tasks,
+                self.SPLIT_PERCENTAGE,
+                self.FEATURE_COLUMNS,
+                self.TARGET_COLUMN,
+                self.SEQUENCE_LENGTH,
+                self.TARGET_START_INDEX,
+                self.DATASET_BATCH_SIZE,
+                logging,
+                mlflow
+            )
+
+            # 5. Build and Complie model
+            model = create_model(
+                architecture=self.MODEL_ARCHITECTURE,
+                input_shape=self.MODEL_INPUT_SHAPE,
+                dropout_rate=self.MODEL_DROPOUT_RATE,
+                logging=logging,
+                summary=False
+            )
+
             model.compile(
-                optimizer=self.MODEL_OPTIMIZER,
-                metrics=self.MODEL_METRICS,
-                loss=self.MODEL_LOSS
+                optimizer=self.MODEL_OPTIMIZER, metrics=self.MODEL_METRICS, loss=self.MODEL_LOSS
             )
 
             # 6. Fit model
@@ -418,48 +282,19 @@ class ActiveLearner(LabelStudioClient):
                 )
 
             history, elapsed_fitting_time = fit_model()
-
             logging.info(f'Model fitting completed in {elapsed_fitting_time} minutes')
             mlflow.log_param('al_model_fitting_time', elapsed_fitting_time)
 
             # 7. Evaluate model on test data
             logging.info(format_with_border('Evaluating Model on Test Data'))
-            files = os.listdir(self.labeled_test_data_path)
-
-            all_evaluation_results = np.empty((0, 2), float)
-
-            for i, f in enumerate(files):
-                test_df = pd.read_csv(os.path.join(self.labeled_test_data_path, f), index_col=False)
-                test_df = self.preprocces(test_df)
-                station_name = test_df.iloc[0]['station_code']
-
-                features, targets, _, _ = self.get_features_and_targets(test_df, split_percentage=1, mean=mean, std=std)
-                test_dataset = self.create_dataset(features, targets)
-
-                evaluation_results = model.evaluate(test_dataset, verbose=0)
-                logging.info(
-                    f'Station: {station_name}, Samples: {len(test_df)}, Loss: {evaluation_results[0]:.2f}, Accuracy: {evaluation_results[1]:.2f}')
-
-                # TODO: Remove this since nested experiment is removed
-                # mlflow.log_param('al_test_station', station_name)
-                # mlflow.log_param('al_test_test_samples', len(test_df))
-
-                # mlflow.log_metric(f"test_{station_name}_loss", evaluation_results[0], step=iteration)
-                # mlflow.log_metric(f"test_{station_name}_accuracy", evaluation_results[1], step=iteration)
-                #
-                all_evaluation_results = np.append(all_evaluation_results, [evaluation_results], axis=0)
-
-            average_loss = np.mean(all_evaluation_results[:, 0])
-            average_accuracy = np.mean(all_evaluation_results[:, 1])
-
+            average_accuracy, average_loss = self.evaluate_on_test_data(model, mean, std)
             mlflow.log_metric('test_avg_loss', average_loss, step=iteration)
             mlflow.log_metric('test_avg_accuracy', average_accuracy, step=iteration)
 
             # 8. Predict and assign uncertainty scores for unlabeled tasks
-            # TODO: Log uncertainty scores
             logging.info(format_with_border('Assigning Uncertainty Scores'))
             unlabeled_tasks = self.project.get_unlabeled_tasks()
-            self.predict(unlabeled_tasks, model)
+            self.predict(unlabeled_tasks, model, mean, std)
 
             logging.info(format_with_border('Done'))
             iteration_duration = time.time() - iteration_start_time
@@ -470,15 +305,37 @@ class ActiveLearner(LabelStudioClient):
 
             mlflow.log_artifact(tmp_log_file)
 
+    def evaluate_on_test_data(self, model, mean, std):
+        files = os.listdir(self.labeled_test_data_path)
+        all_evaluation_results = np.empty((0, 2), float)
+        for i, f in enumerate(files):
+            test_df = pd.read_csv(os.path.join(self.labeled_test_data_path, f), index_col=False)
+            test_df = preprocces(test_df)
+            station_name = test_df.iloc[0]['station_code']
+
+            test_dataset = create_test_dataset(
+                test_df,
+                self.FEATURE_COLUMNS,
+                self.TARGET_COLUMN,
+                self.SEQUENCE_LENGTH,
+                self.TARGET_START_INDEX,
+                self.DATASET_BATCH_SIZE,
+                mean,
+                std
+            )
+
+            evaluation_results = model.evaluate(test_dataset, verbose=0)
+            logging.info(
+                f'Station: {station_name}, Samples: {len(test_df)}, Loss: {evaluation_results[0]:.2f}, Accuracy: {evaluation_results[1]:.2f}')
+
+            all_evaluation_results = np.append(all_evaluation_results, [evaluation_results], axis=0)
+        average_loss = np.mean(all_evaluation_results[:, 0])
+        average_accuracy = np.mean(all_evaluation_results[:, 1])
+        return average_accuracy, average_loss
+
     def display_time_series(self, task):
         df = self.parse_df(task)
-
-        fig = px.line(df, y="HS")
-
-        # Create line plot using plotly express
         fig = px.line(df, y="HS", title="Time Series with Outliers")
-
-        # Add outlier trace
         fig.add_trace(go.Scatter(
             x=df[df['outlier'] == 1][self.DATE_COLUMN],
             y=df[df['outlier'] == 1]['HS'],
