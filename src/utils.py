@@ -1,14 +1,10 @@
-import json
 import logging
-import os
 import sys
 import time
-from datetime import datetime
 from functools import wraps
 
 
-# def setup_logger(name='', level=logging.INFO, log_file='active_learning_run.log'):
-def setup_logger(name='', level=logging.INFO, log_file=None):
+def setup_logger(name='', level=logging.INFO, log_file_path=None):
     logger = logging.getLogger(name)
 
     if logger.hasHandlers():
@@ -24,8 +20,9 @@ def setup_logger(name='', level=logging.INFO, log_file=None):
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
 
-    if log_file is not None:
-        tmp_log_file = os.path.join('/tmp', log_file)
+    if log_file_path is not None:
+        # tmp_log_file = os.path.join('/tmp', log_file_path)
+        tmp_log_file = log_file_path
         file_handler = logging.FileHandler(tmp_log_file, mode='w')
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)

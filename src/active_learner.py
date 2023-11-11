@@ -58,13 +58,13 @@ class ActiveLearner(LabelStudioClient):
             labeled_test_data_path,
             mlflow_tracking_url,
             mlflow_experiment_name,
-            logging_tmp_log_file,
+            log_file_path,
             iteration
     ):
         super().__init__(base_url, api_key, project_name)
         self.labeled_train_data_path = labeled_train_data_path
         self.labeled_test_data_path = labeled_test_data_path
-        self.logging_tmp_log_file = logging_tmp_log_file
+        self.log_file_path = log_file_path
         self.iteration: ActiveLearningIteration = iteration
 
         mlflow.set_tracking_uri(mlflow_tracking_url)
@@ -293,7 +293,7 @@ class ActiveLearner(LabelStudioClient):
                 logging.info(f'Iteration completed in {formatted_time}')
                 mlflow.log_param('al_iteration_completion_time', formatted_time)
 
-                mlflow.log_artifact(tmp_log_file)
+                mlflow.log_artifact(self.log_file_path)
 
     def evaluate_on_test_data(self, model, mean, std):
         files = os.listdir(self.labeled_test_data_path)
@@ -346,45 +346,12 @@ class ActiveLearner(LabelStudioClient):
             logging.info(f"{json_response['processed_items']} annotation(s) were purged")
         else:
             raise Exception(f'Failed to purge annotations: {response.status_code}')
-    #
-    # def get_iteration(self):
-    #     default_data = {
-    #         'iteration': 0,
-    #         'last_execution_date': None,
-    #         'run_name': datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
-    #     }
-    #     try:
-    #         if not os.path.exists(self.iteration_file_path):
-    #             return default_data
-    #         with open(self.iteration_file_path, 'r') as file:
-    #             return json.load(file)
-    #     except Exception as e:
-    #         logging.error(f"Error encountered: {e}")
-    #         return default_data
-    #
-    # def get_and_increment_iteration(self):
-    #     iteration_json = self.get_iteration()
-    #     with open(self.iteration_file_path, 'a+') as file:
-    #         updated_iteration_json = iteration_json.copy()
-    #         updated_iteration_json['iteration'] += 1
-    #         updated_iteration_json['last_execution_date'] = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
-    #         file.seek(0)
-    #         file.truncate()
-    #         json.dump(updated_iteration_json, file)
-    #
-    #     return iteration_json
-    #
-    # def reset_iteration(self):
-    #     try:
-    #         os.remove(self.iteration_file_path)
-    #         logging.info(f'Iteration file has been reset')
-    #     except FileNotFoundError:
-    #         logging.error(f'The file {self.iteration_file_path} does not exist')
 
 
-if __name__ == '__main__':
+def run_active_learner():
     load_dotenv()
-    logging, tmp_log_file = setup_logger(log_file='active_learning_run.log')
+    LOG_FILE_PATH = os.getenv('AL_LOG_FILE_PATH')
+    logging, tmp_log_file_path = setup_logger(log_file_path=LOG_FILE_PATH)
 
     BASE_URL = os.getenv('LS_BASE_URL')
     API_KEY = os.getenv('LS_API_KEY')
@@ -404,10 +371,14 @@ if __name__ == '__main__':
         labeled_test_data_path=LABELED_TEST_DATA_PATH,
         mlflow_tracking_url=MLFLOW_URI,
         mlflow_experiment_name="Snow Height Anomaly Detection",
-        logging_tmp_log_file=tmp_log_file,
+        log_file_path=tmp_log_file_path,
         iteration=ActiveLearningIteration(iteration_file_path='../active-learning.json')
     )
 
     # active_learner.purge_annotations()
     # active_learner.iteration.reset()
     active_learner.run_iteration()
+
+
+# if __name__ == '__main__':
+#     run_active_learner()

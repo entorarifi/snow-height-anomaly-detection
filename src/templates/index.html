@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Logs</title>
+    <style>
+        #header {
+            display: flex; /* Use flexbox for layout */
+            justify-content: space-between; /* Distribute space between items */
+            align-items: center; /* Vertically align items */
+            padding: 10px 0;
+        }
+
+        h1 {
+            margin: 0; /* Remove default margin for h1 */
+        }
+
+        #log-window {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: calc(100vh - 110px);
+            overflow-y: scroll;
+            background-color: #f9f9f9;
+            font-family: monospace;
+            white-space: pre;
+        }
+    </style>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const ws = new WebSocket("ws://192.168.0.19:9090/ws?api_key=1234");
+            const logDiv = document.getElementById("log-window");
+            const startButton = document.getElementById("start-button");
+
+            ws.onmessage = function (event) {
+                logDiv.innerHTML = event.data;
+                logDiv.scrollTop = logDiv.scrollHeight;
+            };
+
+            startButton.addEventListener("click", function () {
+                fetch("/iteration/start")
+                    .then(response => response.json())
+                    .then(data => console.log(data));
+            });
+        });
+    </script>
+</head>
+<body>
+    <div id="header">
+        <h1>Iteration Logs</h1>
+        <button id="start-button">Start Iteration</button>
+    </div>
+    <div id="log-window"></div>
+</body>
+</html>
