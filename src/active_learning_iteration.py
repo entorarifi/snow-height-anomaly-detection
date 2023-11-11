@@ -2,6 +2,8 @@ import json
 import os
 from datetime import datetime
 
+from src.utils import now_formatted
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import logging
 
@@ -14,7 +16,7 @@ class ActiveLearningIteration:
         default_data = {
             'iteration': 0,
             'last_execution_date': None,
-            'run_name': datetime.now().strftime('%Y-%m-%d_%H:%M:%S'),
+            'run_name': now_formatted(),
             'run_id': None,
             'locked': False
         }
@@ -31,7 +33,7 @@ class ActiveLearningIteration:
         iteration = self.get()
         updated_iteration = iteration.copy()
         updated_iteration['iteration'] += 1
-        updated_iteration['last_execution_date'] = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
+        updated_iteration['last_execution_date'] = now_formatted()
 
         self.persist(updated_iteration)
 

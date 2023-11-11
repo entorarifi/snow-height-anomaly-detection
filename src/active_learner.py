@@ -224,7 +224,8 @@ class ActiveLearner(LabelStudioClient):
                 # 1. Pick a random station to label if this is the first iteration; otherwise, choose the one with the
                 # highest uncertainty score
                 task = unlabeled_tasks[0] if len(labeled_tasks) == 0 else self.get_most_uncertain_prediction(
-                    unlabeled_tasks)
+                    unlabeled_tasks
+                )
 
                 self.logger.info(f"Active Station: {task['data']['station_code']}")
                 mlflow.log_param('al_active_station', task['data']['station_code'])
@@ -347,32 +348,26 @@ class ActiveLearner(LabelStudioClient):
         ))
         fig.show()
 
-    def purge_annotations(self):
-        url = f'{self.base_url}/api/dm/actions?id=delete_tasks_annotations&project={self.project_id}'
+    def purge_task_attribute(self, attribute):
+        allowed_properties = ['annotations', 'predictions']
+
+        if attribute not in allowed_properties:
+            raise TypeError(f'Property must be one of {allowed_properties}')
+
+        url = f'{self.base_url}/api/dm/actions?id=delete_tasks_{attribute}&project={self.project_id}'
 
         response = requests.post(url=url, headers=self.headers)
 
         if response.status_code == 200:
             json_response = response.json()
-            self.logger.info(f"{json_response['processed_items']} annotation(s) were purged")
+            self.logger.info(f"{json_response['processed_items']} {attribute}(s) were purged")
         else:
-            raise Exception(f'Failed to purge annotations: {response.status_code}')
-
-    def purge_predictions(self):
-        url = f'{self.base_url}/api/dm/actions?id=delete_tasks_predictions&project={self.project_id}'
-
-        response = requests.post(url=url, headers=self.headers)
-
-        if response.status_code == 200:
-            json_response = response.json()
-            self.logger.info(f"{json_response['processed_items']} prediction(s) were purged")
-        else:
-            raise Exception(f'Failed to purge predictions: {response.status_code}')
+            raise Exception(f'Failed to purge {attribute}: {response.status_code}')
 
     def reset(self):
         self.logger.info(format_with_border('Resetting environment'))
-        self.purge_annotations()
-        self.purge_predictions()
+        self.purge_task_attribute('annotations')
+        self.purge_task_attribute('predictions')
         self.iteration.reset()
 
     @staticmethod

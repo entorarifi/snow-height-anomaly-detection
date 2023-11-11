@@ -1,6 +1,7 @@
 import logging
 import sys
 import time
+from datetime import datetime
 from functools import wraps
 
 
@@ -51,3 +52,7 @@ def format_with_border(message, total_length=100):
     border = '=' * border_length
 
     return f'{border} {message} {border}'
+
+
+def now_formatted():
+    return datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
