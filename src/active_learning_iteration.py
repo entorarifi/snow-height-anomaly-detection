@@ -15,7 +15,8 @@ class ActiveLearningIteration:
             'iteration': 0,
             'last_execution_date': None,
             'run_name': datetime.now().strftime('%Y-%m-%d_%H:%M:%S'),
-            'run_id': None
+            'run_id': None,
+            'locked': False
         }
         try:
             if not os.path.exists(self.iteration_file_path):
@@ -53,3 +54,16 @@ class ActiveLearningIteration:
             logging.info(f'Iteration file has been reset')
         except FileNotFoundError:
             logging.error(f'The file {self.iteration_file_path} does not exist')
+
+    def lock(self):
+        iteration = self.get()
+        iteration['locked'] = True
+        self.persist(iteration)
+
+    def unlock(self):
+        iteration = self.get()
+        iteration['locked'] = False
+        self.persist(iteration)
+
+    def is_locked(self):
+        return self.get()['locked']

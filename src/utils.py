@@ -21,7 +21,6 @@ def setup_logger(name='', level=logging.INFO, log_file_path=None):
     logger.addHandler(stream_handler)
 
     if log_file_path is not None:
-        # tmp_log_file = os.path.join('/tmp', log_file_path)
         tmp_log_file = log_file_path
         file_handler = logging.FileHandler(tmp_log_file, mode='w')
         file_handler.setLevel(level)
