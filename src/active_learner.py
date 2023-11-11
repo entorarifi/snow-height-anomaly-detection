@@ -3,6 +3,8 @@ import os
 from datetime import datetime
 from io import BytesIO
 
+from src.active_learning_iteration import ActiveLearningIteration
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 from src.functions import create_model, preprocces, create_train_val_datasets, create_test_dataset, \
@@ -38,14 +40,14 @@ class ActiveLearner(LabelStudioClient):
 
     # Model configuration
     # MODEL_ARCHITECTURE = "128(l)-64-8(d)-1"
-    MODEL_ARCHITECTURE = "64(l)-8(d)-1"
+    MODEL_ARCHITECTURE = "32(l)-8(d)-1"
     MODEL_INPUT_SHAPE = (SEQUENCE_LENGTH, len(FEATURE_COLUMNS))
     MODEL_DROPOUT_RATE = 0.5
     MODEL_OPTIMIZER = 'adam'
     MODEL_METRICS = ['accuracy']
     MODEL_LOSS = 'binary_crossentropy'
     MODEL_BATCH_SIZE = 64
-    MODEL_EPOCHS = 5
+    MODEL_EPOCHS = 3
 
     def __init__(
             self,
@@ -57,13 +59,13 @@ class ActiveLearner(LabelStudioClient):
             mlflow_tracking_url,
             mlflow_experiment_name,
             logging_tmp_log_file,
-            iteration_file_path
+            iteration
     ):
         super().__init__(base_url, api_key, project_name)
         self.labeled_train_data_path = labeled_train_data_path
         self.labeled_test_data_path = labeled_test_data_path
         self.logging_tmp_log_file = logging_tmp_log_file
-        self.iteration_file_path = iteration_file_path
+        self.iteration: ActiveLearningIteration = iteration
 
         mlflow.set_tracking_uri(mlflow_tracking_url)
         mlflow.set_experiment(mlflow_experiment_name)
@@ -193,105 +195,105 @@ class ActiveLearner(LabelStudioClient):
 
     def run_iteration(self):
         iteration_start_time = time.time()
-        iteration = self.get_and_increment_iteration()['iteration']
+        iteration = self.iteration.get_and_increment()
 
-        with mlflow.start_run(run_name=f'Iteration {iteration}'):
-            logging.info(format_with_border(f'Iteration {iteration}'))
-            self.log_parameters(iteration)
-            logging.info(f"Model Architecture: {self.MODEL_ARCHITECTURE}")
+        with mlflow.start_run(run_id=iteration['run_id'], run_name=f"Run_{iteration['run_name']}") as run:
+            self.iteration.set_run_id(run.info.run_id)
+            with mlflow.start_run(run_name=f"Iteration {iteration['iteration']}", nested=True):
+                logging.info(format_with_border(f"Iteration {iteration['iteration']}"))
+                self.log_parameters(iteration['iteration'])
 
-            labeled_tasks = self.project.get_labeled_tasks(only_ids=True)
-            unlabeled_tasks = self.project.get_unlabeled_tasks()
-            # task = random.choice(unlabeled_tasks)
+                labeled_tasks = self.project.get_labeled_tasks(only_ids=True)
+                unlabeled_tasks = self.project.get_unlabeled_tasks()
+                # task = random.choice(unlabeled_tasks)
 
-            mlflow.log_param('al_labeled_tasks', len(labeled_tasks))
-            mlflow.log_param('al_unlabeled_tasks', len(unlabeled_tasks))
+                mlflow.log_param('al_labeled_tasks', len(labeled_tasks))
+                mlflow.log_param('al_unlabeled_tasks', len(unlabeled_tasks))
 
-            # 1. Pick a random station to label if this is the first iteration; otherwise, choose the one with the
-            # highest uncertainty score
-            task = unlabeled_tasks[0] if len(labeled_tasks) == 0 else self.get_most_uncertain_prediction(
-                unlabeled_tasks)
+                # 1. Pick a random station to label if this is the first iteration; otherwise, choose the one with the
+                # highest uncertainty score
+                task = unlabeled_tasks[0] if len(labeled_tasks) == 0 else self.get_most_uncertain_prediction(
+                    unlabeled_tasks)
 
-            logging.info(f"Active Station: {task['data']['station_code']}")
-            mlflow.log_param('al_active_station', task['data']['station_code'])
+                logging.info(f"Active Station: {task['data']['station_code']}")
+                mlflow.log_param('al_active_station', task['data']['station_code'])
 
-            # 2. Ask for labels.
+                # 2. Ask for labels.
 
-            # 3. Label data
-            payload = self.generate_prediction_payload(self.simulate_data_label(task))
-            self.project.create_annotation(task['id'], result=payload)
+                # 3. Label data
+                payload = self.generate_prediction_payload(self.simulate_data_label(task))
+                self.project.create_annotation(task['id'], result=payload)
 
-            # 4. Parse and split labeled data. Refetch the tasks to include the newly labeled station data in the
-            # train/validation dataset split
-            logging.info(format_with_border('Preparing Training Data'))
-            labeled_tasks = self.project.get_labeled_tasks()
-            stations = ', '.join(task['data']['station_code'] for task in labeled_tasks)
-            logging.info(f'Stations: {stations}')
-            mlflow.log_param('al_training_station_names', stations)
-            mlflow.log_param('al_training_split_percentage', self.SPLIT_PERCENTAGE)
-            parsed_labeled_tasks = [self.parse_df(task) for task in labeled_tasks]
-            train_dataset, val_dataset, mean, std, _, num_train_samples, num_val_samples = create_train_val_datasets(
-                parsed_labeled_tasks,
-                self.SPLIT_PERCENTAGE,
-                self.FEATURE_COLUMNS,
-                self.TARGET_COLUMN,
-                self.SEQUENCE_LENGTH,
-                self.TARGET_START_INDEX,
-                self.DATASET_BATCH_SIZE
-            )
-            logging.info(f"Training samples: {num_train_samples}")
-            logging.info(f"Validation samples: {num_val_samples}")
-            mlflow.log_param('al_training_samples', num_train_samples)
-            mlflow.log_param('al_validation_samples', num_val_samples)
+                # 4. Parse and split labeled data. Refetch the tasks to include the newly labeled station data in the
+                # train/validation dataset split
+                logging.info(format_with_border('Preparing Training Data'))
+                labeled_tasks = self.project.get_labeled_tasks()
+                stations = ', '.join(task['data']['station_code'] for task in labeled_tasks)
+                logging.info(f'Stations: {stations}')
+                mlflow.log_param('al_training_station_names', stations)
+                parsed_labeled_tasks = [self.parse_df(task) for task in labeled_tasks]
+                train_dataset, val_dataset, mean, std, num_train_samples, num_val_samples, _ = create_train_val_datasets(
+                    parsed_labeled_tasks,
+                    self.SPLIT_PERCENTAGE,
+                    self.FEATURE_COLUMNS,
+                    self.TARGET_COLUMN,
+                    self.SEQUENCE_LENGTH,
+                    self.TARGET_START_INDEX,
+                    self.DATASET_BATCH_SIZE
+                )
+                logging.info(f"Training samples: {num_train_samples}")
+                logging.info(f"Validation samples: {num_val_samples}")
+                mlflow.log_param('al_training_samples', num_train_samples)
+                mlflow.log_param('al_validation_samples', num_val_samples)
 
-            # 5. Build and compile model
-            model = create_model(
-                architecture=self.MODEL_ARCHITECTURE,
-                input_shape=self.MODEL_INPUT_SHAPE,
-                dropout_rate=self.MODEL_DROPOUT_RATE,
-                logging=logging,
-                summary=False
-            )
-
-            model.compile(
-                optimizer=self.MODEL_OPTIMIZER, metrics=self.MODEL_METRICS, loss=self.MODEL_LOSS
-            )
-
-            # 6. Fit model
-            logging.info(format_with_border('Training Model'))
-
-            @measure_execution_time
-            def fit_model():
-                model.fit(
-                    train_dataset,
-                    epochs=self.MODEL_EPOCHS,
-                    batch_size=self.MODEL_BATCH_SIZE,
-                    validation_data=val_dataset
+                # 5. Build and compile model
+                model = create_model(
+                    architecture=self.MODEL_ARCHITECTURE,
+                    input_shape=self.MODEL_INPUT_SHAPE,
+                    dropout_rate=self.MODEL_DROPOUT_RATE,
+                    logging=logging,
+                    summary=False
+                )
+                model.compile(
+                    optimizer=self.MODEL_OPTIMIZER, metrics=self.MODEL_METRICS, loss=self.MODEL_LOSS
                 )
 
-            history, elapsed_fitting_time = fit_model()
-            logging.info(f'Model fitting completed in {elapsed_fitting_time}')
-            mlflow.log_param('al_model_fitting_time', elapsed_fitting_time)
+                # 6. Fit model
+                logging.info(format_with_border('Fitting Model'))
 
-            # 7. Evaluate model on test data
-            logging.info(format_with_border('Evaluating Model on Test Data'))
-            average_accuracy, average_loss = self.evaluate_on_test_data(model, mean, std)
-            mlflow.log_metric('test_avg_loss', average_loss, step=iteration)
-            mlflow.log_metric('test_avg_accuracy', average_accuracy, step=iteration)
+                @measure_execution_time
+                def fit_model():
+                    model.fit(
+                        train_dataset,
+                        epochs=self.MODEL_EPOCHS,
+                        batch_size=self.MODEL_BATCH_SIZE,
+                        validation_data=val_dataset
+                    )
 
-            # 8. Predict and assign uncertainty scores for unlabeled tasks
-            logging.info(format_with_border('Assigning Uncertainty Scores'))
-            unlabeled_tasks = self.project.get_unlabeled_tasks()
-            self.predict(unlabeled_tasks, model, mean, std)
+                history, elapsed_fitting_time = fit_model()
+                logging.info(f'Model fitting completed in {elapsed_fitting_time}')
+                mlflow.log_param('al_model_fitting_time', elapsed_fitting_time)
 
-            logging.info(format_with_border('Done'))
-            iteration_duration = time.time() - iteration_start_time
-            minutes, seconds = divmod(iteration_duration, 60)
-            formatted_time = f"{int(minutes)}m{int(seconds)}s"
-            logging.info(f'Iteration completed in {formatted_time}')
-            mlflow.log_param('al_iteration_completion_time', formatted_time)
+                # 7. Evaluate model on test data
+                logging.info(format_with_border('Evaluating Model on Test Data'))
+                average_accuracy, average_loss = self.evaluate_on_test_data(model, mean, std)
+                mlflow.log_metric('test_avg_loss', average_loss)
+                mlflow.log_metric('test_avg_accuracy', average_accuracy)
 
-            mlflow.log_artifact(tmp_log_file)
+                # 8. Predict and assign uncertainty scores for unlabeled tasks
+                logging.info(format_with_border('Assigning Uncertainty Scores'))
+                unlabeled_tasks = self.project.get_unlabeled_tasks()
+                self.predict(unlabeled_tasks, model, mean, std)
+
+                # 9. Done
+                logging.info(format_with_border('Done'))
+                iteration_duration = time.time() - iteration_start_time
+                minutes, seconds = divmod(iteration_duration, 60)
+                formatted_time = f"{int(minutes)}m{int(seconds)}s"
+                logging.info(f'Iteration completed in {formatted_time}')
+                mlflow.log_param('al_iteration_completion_time', formatted_time)
+
+                mlflow.log_artifact(tmp_log_file)
 
     def evaluate_on_test_data(self, model, mean, std):
         files = os.listdir(self.labeled_test_data_path)
@@ -344,39 +346,40 @@ class ActiveLearner(LabelStudioClient):
             logging.info(f"{json_response['processed_items']} annotation(s) were purged")
         else:
             raise Exception(f'Failed to purge annotations: {response.status_code}')
-
-    def get_iteration(self):
-        if not os.path.exists(self.iteration_file_path):
-            return {'iteration': 0, 'last_execution_date': None}
-
-        with open(self.iteration_file_path, 'r') as file:
-            try:
-                json_content = json.load(file)
-                return json_content
-            except json.JSONDecodeError:
-                return {'iteration': 0, 'last_execution_date': None}
-
-    def get_and_increment_iteration(self):
-        iteration_json = self.get_iteration()
-
-        with open(self.iteration_file_path, 'a+') as file:
-            updated_iteration_json = iteration_json.copy()
-            updated_iteration_json['iteration'] += 1
-            updated_iteration_json['last_execution_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-            file.seek(0)
-            file.truncate()
-
-            json.dump(updated_iteration_json, file)
-
-        return iteration_json
-
-    def reset_iteration(self):
-        try:
-            os.remove(self.iteration_file_path)
-            logging.info(f'Iteration file has been reset')
-        except FileNotFoundError:
-            logging.error(f'The file {self.iteration_file_path} does not exist')
+    #
+    # def get_iteration(self):
+    #     default_data = {
+    #         'iteration': 0,
+    #         'last_execution_date': None,
+    #         'run_name': datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
+    #     }
+    #     try:
+    #         if not os.path.exists(self.iteration_file_path):
+    #             return default_data
+    #         with open(self.iteration_file_path, 'r') as file:
+    #             return json.load(file)
+    #     except Exception as e:
+    #         logging.error(f"Error encountered: {e}")
+    #         return default_data
+    #
+    # def get_and_increment_iteration(self):
+    #     iteration_json = self.get_iteration()
+    #     with open(self.iteration_file_path, 'a+') as file:
+    #         updated_iteration_json = iteration_json.copy()
+    #         updated_iteration_json['iteration'] += 1
+    #         updated_iteration_json['last_execution_date'] = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
+    #         file.seek(0)
+    #         file.truncate()
+    #         json.dump(updated_iteration_json, file)
+    #
+    #     return iteration_json
+    #
+    # def reset_iteration(self):
+    #     try:
+    #         os.remove(self.iteration_file_path)
+    #         logging.info(f'Iteration file has been reset')
+    #     except FileNotFoundError:
+    #         logging.error(f'The file {self.iteration_file_path} does not exist')
 
 
 if __name__ == '__main__':
@@ -402,9 +405,9 @@ if __name__ == '__main__':
         mlflow_tracking_url=MLFLOW_URI,
         mlflow_experiment_name="Snow Height Anomaly Detection",
         logging_tmp_log_file=tmp_log_file,
-        iteration_file_path='../active-learning.json'
+        iteration=ActiveLearningIteration(iteration_file_path='../active-learning.json')
     )
 
     # active_learner.purge_annotations()
-    # active_learner.reset_iteration()
+    # active_learner.iteration.reset()
     active_learner.run_iteration()
