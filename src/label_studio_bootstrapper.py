@@ -71,7 +71,7 @@ class LabelStudioClientBootstrapper(LabelStudioClient):
         storage = self.get_storage()
 
         if storage is None:
-            logging.info("Creating storage...")
+            logging.info("Connecting to s3 storage...")
             storage = self.project.connect_s3_import_storage(
                 bucket=self.s3_bucket_name,
                 title=self.s3_bucket_name,
@@ -81,6 +81,7 @@ class LabelStudioClientBootstrapper(LabelStudioClient):
                 presign_ttl=60,
                 use_blob_urls=False
             )
+            logging.info("Successfully connected to storage")
 
             self.project.sync_storage(ProjectStorage.S3.value, storage['id'])
         else:

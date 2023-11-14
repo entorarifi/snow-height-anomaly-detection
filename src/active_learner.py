@@ -1,4 +1,5 @@
 import os
+import random
 from io import BytesIO
 
 from src.active_learning_iteration import ActiveLearningIteration
@@ -112,13 +113,18 @@ class ActiveLearner(LabelStudioClient):
 
         return payload
 
-    @staticmethod
-    def get_most_uncertain_prediction(tasks):
+    # TODO: Make it actually random
+    def get_most_uncertain_prediction_or_random(self):
+        unlabeled_tasks = self.project.get_unlabeled_tasks()
+
+        if unlabeled_tasks[0]['predictions_score'] is None:
+            return unlabeled_tasks[0]
+
         most_uncertain = {
             'predictions_score': 0
         }
 
-        for task in tasks:
+        for task in unlabeled_tasks:
             if task['predictions_score'] > most_uncertain['predictions_score']:
                 most_uncertain = task
 
@@ -176,6 +182,10 @@ class ActiveLearner(LabelStudioClient):
             else:
                 raise Exception(f'Failed to retrieve data: {response.status_code}')
 
+        most_uncertain_station = {
+            'score': 0
+        }
+
         for k in data.keys():
             df = preprocces(data[k]['df'])
 
@@ -190,8 +200,15 @@ class ActiveLearner(LabelStudioClient):
                 std
             )
 
-            predictions, uncertainty_score = predict_with_uncertainty(model, dataset,
-                                                                      n_iter=self.UNCERTAINTY_ITERATIONS)
+            predictions, uncertainty_score = predict_with_uncertainty(
+                model, dataset, n_iter=self.UNCERTAINTY_ITERATIONS
+            )
+
+            if most_uncertain_station['score'] < uncertainty_score:
+                most_uncertain_station = {
+                    'score': uncertainty_score,
+                    'name': k
+                }
 
             self.logger.info(f'Station: {k}, Uncertainty Score: {uncertainty_score:.4f}')
 
@@ -200,6 +217,13 @@ class ActiveLearner(LabelStudioClient):
 
             payload = self.generate_prediction_payload(df)
             self.project.create_prediction(task_id=data[k]['task_id'], result=payload, score=float(uncertainty_score))
+
+        self.logger.info(f"Most uncertain station: {most_uncertain_station['name']}")
+
+    def pick_random_unlabeled_station(self):
+        unlabeled_tasks = self.project.get_unlabeled_tasks()
+
+        return random.choice(unlabeled_tasks)
 
     def run_iteration(self):
         if self.iteration.is_locked():
@@ -216,25 +240,22 @@ class ActiveLearner(LabelStudioClient):
 
                 labeled_tasks = self.project.get_labeled_tasks(only_ids=True)
                 unlabeled_tasks = self.project.get_unlabeled_tasks()
-                # task = random.choice(unlabeled_tasks)
 
                 mlflow.log_param('al_labeled_tasks', len(labeled_tasks))
                 mlflow.log_param('al_unlabeled_tasks', len(unlabeled_tasks))
 
                 # 1. Pick a random station to label if this is the first iteration; otherwise, choose the one with the
                 # highest uncertainty score
-                task = unlabeled_tasks[0] if len(labeled_tasks) == 0 else self.get_most_uncertain_prediction(
-                    unlabeled_tasks
-                )
+                task = self.get_most_uncertain_prediction_or_random(unlabeled_tasks)
 
                 self.logger.info(f"Active Station: {task['data']['station_code']}")
                 mlflow.log_param('al_active_station', task['data']['station_code'])
 
-                # 2. Ask for labels.
+                # 2. Ask for labels
 
                 # 3. Label data
-                payload = self.generate_prediction_payload(self.simulate_data_label(task))
-                self.project.create_annotation(task['id'], result=payload)
+                # payload = self.generate_prediction_payload(self.simulate_data_label(task))
+                # self.project.create_annotation(task['id'], result=payload)
 
                 # 4. Parse and split labeled data. Refetch the tasks to include the newly labeled station data in the
                 # train/validation dataset split
