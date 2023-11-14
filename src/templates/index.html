@@ -31,7 +31,27 @@
             const ws = new WebSocket(`ws://${host}/ws?api_key={{ api_key }}`);
             const logDiv = document.getElementById("log-window");
             const startButton = document.getElementById("start-button");
+            const labelStation = document.getElementById("label-station");
             const resetButton = document.getElementById("reset-button");
+            const iterationInfo = document.getElementById("iteration-info");
+            const mostUncertainInfo = document.getElementById("most-uncertain-info");
+            const statusInfo = document.getElementById("status-info");
+
+            function loadDataOnStartup() {
+                fetch("/ui")
+                    .then(response => response.json())
+                    .then(data => {
+                        const { most_uncertain, iteration, status } = data
+
+                        iterationInfo.querySelector('b').innerHTML = iteration
+                        mostUncertainInfo.querySelector('b').innerHTML = most_uncertain
+                        statusInfo.querySelector('b').innerHTML = status
+                    });
+            }
+
+            loadDataOnStartup()
+
+            setTimeout(loadDataOnStartup, 10000)
 
             ws.onmessage = function (event) {
                 logDiv.innerHTML = event.data;
@@ -43,6 +63,16 @@
                     .then(response => response.json())
                     .then(data => {
                         alert(data.message)
+                        loadDataOnStartup()
+                    });
+            });
+
+            labelStation.addEventListener("click", () => {
+                fetch("/station/label")
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message)
+                        loadDataOnStartup()
                     });
             });
 
@@ -57,6 +87,7 @@
                     .then(response => response.json())
                     .then(data => {
                         alert(data.message)
+                        loadDataOnStartup()
                     });
             });
         });
@@ -64,9 +95,15 @@
 </head>
 <body>
     <div id="header">
-        <h1>Active Learning Logs</h1>
+        <div>
+            <h1>Active Learning Logs | </h1>
+            <span id="iteration-info">Iteration: <b>...</b></span> |
+            <span id="status-info">Status: <b>...</b></span> |
+            <span id="most-uncertain-info">Most uncertain: <b>...</b></span>
+        </div>
         <div>
             <button id="start-button">Start Iteration</button>
+            <button id="label-station">Label Station</button>
             <button id="reset-button">Reset Experiment</button>
         </div>
     </div>
