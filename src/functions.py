@@ -201,9 +201,10 @@ def plot_keras_history(history):
 
     plt.tight_layout()
     plt.show()
+    return plt
 
 
-def plot_data(dfs, y='HS', target='no_snow', predictions=[]):
+def plot_data(dfs, y='HS', target='no_snow', predictions=[], show=True):
     if not isinstance(dfs, list):
         dfs = [dfs]
 
@@ -253,10 +254,14 @@ def plot_data(dfs, y='HS', target='no_snow', predictions=[]):
             ax.legend()
 
     plt.tight_layout()
-    plt.show()
+
+    if show:
+        plt.show()
+
+    return fig
 
 
-def predict_with_uncertainty(model, x, n_iter=100):
+def predict_with_uncertainty(model, x, n_iter=5):
     predictions = np.array([model.predict(x, verbose=0) for _ in range(n_iter)])
     uncertainty = np.std(predictions, axis=0)
     scaled_uncertainty = (uncertainty - uncertainty.min()) / (uncertainty.max() - uncertainty.min())
