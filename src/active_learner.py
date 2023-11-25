@@ -34,11 +34,11 @@ class ActiveLearner(LabelStudioClient):
     DATASET_BATCH_SIZE = 64
 
     # Active learning
-    UNCERTAINTY_ITERATIONS = 5
+    UNCERTAINTY_ITERATIONS = 3
 
     # Model configuration
     # MODEL_ARCHITECTURE = "128(l)-64-8(d)-1"
-    MODEL_ARCHITECTURE = "32(l)-8(d)-1"
+    MODEL_ARCHITECTURE = "128(l)-8(d)-1"
     MODEL_INPUT_SHAPE = (SEQUENCE_LENGTH, len(FEATURE_COLUMNS))
     MODEL_DROPOUT_RATE = 0.5
     MODEL_OPTIMIZER = 'adam'
@@ -246,7 +246,7 @@ class ActiveLearner(LabelStudioClient):
 
                 # 1. Pick a random station to label if this is the first iteration; otherwise, choose the one with the
                 # highest uncertainty score
-                task = self.get_most_uncertain_prediction_or_random(unlabeled_tasks)
+                task = self.get_most_uncertain_prediction_or_random()
 
                 self.logger.info(f"Active Station: {task['data']['station_code']}")
                 mlflow.log_param('al_active_station', task['data']['station_code'])

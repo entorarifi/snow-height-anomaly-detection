@@ -98,7 +98,7 @@ async def get(background_tasks: BackgroundTasks, credentials: HTTPBasicCredentia
         return {'success': False, 'message': 'An iteration is already running. Please try again later.'}
 
     unlabeled_tasks = active_learner.project.get_unlabeled_tasks()
-    task = active_learner.get_most_uncertain_prediction_or_random(unlabeled_tasks)
+    task = active_learner.get_most_uncertain_prediction_or_random()
     payload = active_learner.generate_prediction_payload(active_learner.simulate_data_label(task))
     active_learner.project.create_annotation(task['id'], result=payload)
 
