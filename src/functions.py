@@ -1,4 +1,3 @@
-# %%
 import os
 import re
 
@@ -7,6 +6,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
+from imblearn.over_sampling import SMOTE
+from keras.src.layers import Dropout
 
 from src.utils import format_with_border
 
@@ -108,7 +109,7 @@ def create_dataset(
     )
 
 
-def create_model(architecture, input_shape, dropout_rate, logging=None, summary=True):
+def create_model(architecture, input_shape, dropout_rate, logging=None, summary=True, dropout_layer='monte_carlo'):
     arch_split = architecture.split('-')
     dense = True
     bidirectional = False
@@ -149,7 +150,7 @@ def create_model(architecture, input_shape, dropout_rate, logging=None, summary=
                 current_layer = keras.layers.Bidirectional(current_layer)
 
             layers.extend([
-                MonteCarloDropout(dropout_rate),
+                MonteCarloDropout(dropout_rate) if dropout_layer == 'monte_carlo' else Dropout(dropout_rate),
                 current_layer
             ])
 
@@ -328,6 +329,46 @@ def create_train_val_datasets(
     return train_dataset, val_dataset, mean, std, len(train_df), len(val_df), combined_df
 
 
+def create_train_val_datasets_with_smote(
+        dfs,
+        split_percentage,
+        feature_columns,
+        target_column,
+        sequence_length,
+        target_start_index,
+        batch_size
+):
+    train_df, val_df = pd.DataFrame(), pd.DataFrame()
+
+    for df in dfs:
+        split_index = int(len(df) * split_percentage)
+
+        train_df = pd.concat([train_df, df[:split_index]])
+        val_df = pd.concat([val_df, df[split_index:]])
+
+    train_preprocessed = preprocces(train_df)
+    features_train, targets_train, mean, std = get_features_and_targets(train_preprocessed, len(train_preprocessed),
+                                                                        feature_columns, target_column)
+
+    smote = SMOTE(random_state=42)
+    features_train_balanced, targets_train_balanced = smote.fit_resample(features_train, targets_train)
+
+    val_preprocessed = preprocces(val_df)
+    features_val, targets_val, _, _ = get_features_and_targets(val_preprocessed, len(val_preprocessed), feature_columns,
+                                                               target_column, mean=mean, std=std)
+
+    train_dataset = create_dataset(
+        features_train_balanced, targets_train_balanced, sequence_length, target_start_index, batch_size, shuffle=True
+    )
+
+    val_dataset = create_dataset(
+        features_val, targets_val, sequence_length, target_start_index, batch_size, shuffle=True
+    )
+
+    return train_dataset, val_dataset, mean, std, len(train_df), len(val_df), pd.concat(
+        [train_preprocessed, val_preprocessed])
+
+
 def create_test_dataset(
         df, feature_columns, target_column, sequence_length, target_start_index, batch_size, mean, std
 ):
@@ -351,3 +392,34 @@ def load_stations_from_path(path):
     files = os.listdir(path)
 
     return [pd.read_csv(os.path.join(path, f), index_col=False) for f in files]
+
+def replicate_seasonal_pattern(df, column_name):
+    yearly_data = df.resample('Y').count()
+    max_count = yearly_data.max().iloc[0]
+    first_full_year = yearly_data[yearly_data[column_name] == max_count].index[0].year
+
+    if max_count < 365:
+        return df
+
+    period_arrays = []
+
+    for year in range(first_full_year, first_full_year + 3):
+        start_date = f'{year}-01-01'
+        end_date = f'{year}-12-31'
+        if start_date in df.index and end_date in df.index:
+            typical_period = df.loc[start_date:end_date, column_name]
+            period_arrays.append(typical_period.values)
+
+    if len(period_arrays) < 3:
+        return df
+
+    min_length = min(len(arr) for arr in period_arrays)
+    period_arrays = [arr[:min_length] for arr in period_arrays]
+    combined_mean = np.mean(period_arrays, axis=0)
+
+    repeat_times = len(df) // len(combined_mean) + 1
+    fill_pattern = np.tile(combined_mean, repeat_times)[:len(df)]
+
+    df[column_name].fillna(pd.Series(fill_pattern, index=df.index), inplace=True)
+
+    return df
