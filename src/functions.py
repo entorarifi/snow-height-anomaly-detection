@@ -180,30 +180,28 @@ def create_model(architecture, input_shape, dropout_rate, logging=None, summary=
 
 
 def plot_keras_history(history):
-    # Plot training & validation loss values
-    plt.figure(figsize=(12, 5))
+    fig = plt.figure(figsize=(12, 5))
 
-    plt.subplot(1, 2, 1)
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
-    plt.title('Model loss')
-    plt.ylabel('Loss')
-    plt.xlabel('Epoch')
-    plt.legend(['Train', 'Validation'], loc='upper left')
+    ax1 = fig.add_subplot(1, 2, 1)
+    ax1.plot(history.history['loss'])
+    ax1.plot(history.history['val_loss'])
+    ax1.set_title('Model Loss')
+    ax1.set_ylabel('Loss')
+    ax1.set_xlabel('Epoch')
+    ax1.legend(['Train', 'Validation'], loc='upper left')
 
-    # Plot training & validation accuracy values
-    plt.subplot(1, 2, 2)
-    plt.plot(history.history['accuracy'])
-    plt.plot(history.history['val_accuracy'])
-    plt.title('Model accuracy')
-    plt.ylabel('Accuracy')
-    plt.xlabel('Epoch')
-    plt.legend(['Train', 'Validation'], loc='upper left')
+    ax2 = fig.add_subplot(1, 2, 2)
+    ax2.plot(history.history['accuracy'])
+    ax2.plot(history.history['val_accuracy'])
+    ax2.set_title('Model Accuracy')
+    ax2.set_ylabel('Accuracy')
+    ax2.set_xlabel('Epoch')
+    ax2.legend(['Train', 'Validation'], loc='upper left')
 
     plt.tight_layout()
     plt.show()
-    return plt
 
+    return fig
 
 def plot_data(dfs, y='HS', target='no_snow', predictions=[], show=True):
     if not isinstance(dfs, list):
