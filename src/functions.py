@@ -3,13 +3,14 @@ import os
 import re
 
 import keras
-import mlflow
-import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
+import mlflow
+import numpy as np
+import pandas as pd
+import seaborn as sns
 import tensorflow as tf
-from imblearn.over_sampling import SMOTE
 from keras.src.layers import Dropout
+from sklearn.metrics import confusion_matrix
 
 from src.utils import format_with_border
 
@@ -306,68 +307,48 @@ def create_train_val_datasets(
         target_start_index,
         batch_size
 ):
-    train_df, val_df = pd.DataFrame(), pd.DataFrame()
+    total_sequences = sum(len(df) - sequence_length for df in dfs)
+
+    seq_array = np.zeros((total_sequences, sequence_length, len(feature_columns)))
+    target_array = np.zeros(total_sequences)
+
+    insert_idx = 0
 
     for df in dfs:
-        split_index = int(len(df) * split_percentage)
+        df = preprocces(df)
+        features = df[feature_columns].values
+        targets = df[target_column].values if target_column else np.zeros(len(df))
 
-        train_df = pd.concat([train_df, df[:split_index]])
-        val_df = pd.concat([val_df, df[split_index:]])
+        max_index = len(df) - sequence_length
 
-    combined_df = preprocces(pd.concat([train_df, val_df]))
-    split_index = len(train_df)
+        for i in range(max_index):
+            seq_array[insert_idx] = features[i:i + sequence_length]
+            target_array[insert_idx] = targets[i + sequence_length - 1]
+            insert_idx += 1
 
-    features, targets, mean, std = get_features_and_targets(combined_df, split_index, feature_columns, target_column)
+    indices = np.arange(seq_array.shape[0])
+    np.random.shuffle(indices)
+    shuffled_seq_array = seq_array[indices]
+    shuffled_target_array = target_array[indices]
 
-    train_dataset = create_dataset(
-        features, targets, sequence_length, target_start_index, batch_size, end_index=split_index, shuffle=True
-    )
+    split_index = int(split_percentage * len(shuffled_seq_array))
 
-    val_dataset = create_dataset(
-        features, targets, sequence_length, target_start_index, batch_size, start_index=split_index, shuffle=True
-    )
+    train_seq = shuffled_seq_array[:split_index]
+    val_seq = shuffled_seq_array[split_index:]
+    train_target = shuffled_target_array[:split_index]
+    val_target = shuffled_target_array[split_index:]
 
-    return train_dataset, val_dataset, mean, std, len(train_df), len(val_df), combined_df
+    mean = train_seq.mean(axis=(0, 1))
+    std = train_seq.std(axis=(0, 1))
 
+    train_seq = (train_seq - mean) / std
+    val_seq = (val_seq - mean) / std
 
-def create_train_val_datasets_with_smote(
-        dfs,
-        split_percentage,
-        feature_columns,
-        target_column,
-        sequence_length,
-        target_start_index,
-        batch_size
-):
-    train_df, val_df = pd.DataFrame(), pd.DataFrame()
+    train_dataset = tf.data.Dataset.from_tensor_slices((train_seq, train_target)).cache().shuffle(
+        buffer_size=1000).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    val_dataset = tf.data.Dataset.from_tensor_slices((val_seq, val_target)).batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
-    for df in dfs:
-        split_index = int(len(df) * split_percentage)
-
-        train_df = pd.concat([train_df, df[:split_index]])
-        val_df = pd.concat([val_df, df[split_index:]])
-
-    train_preprocessed = preprocces(train_df)
-    features_train, targets_train, mean, std = get_features_and_targets(train_preprocessed, len(train_preprocessed),
-                                                                        feature_columns, target_column)
-
-    smote = SMOTE(random_state=42)
-    features_train_balanced, targets_train_balanced = smote.fit_resample(features_train, targets_train)
-
-    val_preprocessed = preprocces(val_df)
-    features_val, targets_val, _, _ = get_features_and_targets(val_preprocessed, len(val_preprocessed), feature_columns,
-                                                               target_column, mean=mean, std=std)
-
-    train_dataset = create_dataset(
-        features_train_balanced, targets_train_balanced, sequence_length, target_start_index, batch_size, shuffle=True
-    )
-
-    val_dataset = create_dataset(
-        features_val, targets_val, sequence_length, target_start_index, batch_size, shuffle=True
-    )
-
-    return train_dataset, val_dataset, mean, std, len(train_df), len(val_df), pd.concat(
-        [train_preprocessed, val_preprocessed])
+    return train_dataset, val_dataset, mean, std, len(train_seq), len(val_seq), None
 
 
 def create_test_dataset(
@@ -433,3 +414,29 @@ def mlflow_log_np_as_file(data, name):
     np.savetxt(buffer, data, delimiter=',')
     mlflow.log_text(buffer.getvalue(), artifact_file=f'{name}.txt')
     buffer.close()
+
+
+def generate_confusion_matrix(testing_stations, predictions, target_tart_index):
+    y_true = [ts.loc[target_tart_index:, 'no_snow'].values for ts in testing_stations.values()]
+    y_pred = predictions
+    n_matrices = len(y_true)
+    n_cols = 3
+    n_rows = (n_matrices + n_cols - 1) // n_cols
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 5))
+    fig.tight_layout(pad=5.0)
+
+    for i in range(n_matrices):
+        ax = axes[i // n_cols, i % n_cols]
+        cm = confusion_matrix(y_true[i], y_pred[i])
+        sns.heatmap(cm, annot=True, fmt='d', cmap="crest", ax=ax)
+        ax.set_title(list(testing_stations.keys())[i])
+        ax.set_ylabel('Actual')
+        ax.set_xlabel('Predicted')
+
+    for j in range(i + 1, n_rows * n_cols):
+        axes[j // n_cols, j % n_cols].axis('off')
+
+    plt.show()
+
+    return fig
