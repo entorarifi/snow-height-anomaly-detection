@@ -1,7 +1,9 @@
+import io
 import os
 import re
 
 import keras
+import mlflow
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -203,6 +205,7 @@ def plot_keras_history(history):
 
     return fig
 
+
 def plot_data(dfs, y='HS', target='no_snow', predictions=[], show=True):
     if not isinstance(dfs, list):
         dfs = [dfs]
@@ -386,10 +389,12 @@ def create_test_datasets(
         for df in dfs
     ]
 
+
 def load_stations_from_path(path):
     files = os.listdir(path)
 
     return [pd.read_csv(os.path.join(path, f), index_col=False) for f in files]
+
 
 def replicate_seasonal_pattern(df, column_name):
     yearly_data = df.resample('Y').count()
@@ -421,3 +426,10 @@ def replicate_seasonal_pattern(df, column_name):
     df[column_name].fillna(pd.Series(fill_pattern, index=df.index), inplace=True)
 
     return df
+
+
+def mlflow_log_np_as_file(data, name):
+    buffer = io.StringIO()
+    np.savetxt(buffer, data, delimiter=',')
+    mlflow.log_text(buffer.getvalue(), artifact_file=f'{name}.txt')
+    buffer.close()
